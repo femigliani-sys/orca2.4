@@ -36,6 +36,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { AlertTriangle, X as CloseIcon } from 'lucide-react';
+import { useState } from 'react';
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
@@ -109,14 +111,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <UserMenu />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <DataErrorBanner />
+          {children}
+        </main>
       </div>
     </div>
   );
 }
 
-function SidebarContent({ isActive, onNavigate }: { isActive: (href: string) => boolean; onNavigate?: () => void }) {
-  const { user, company, followUps, quotes } = useData();
+function SidebarContent({ isActive, onNavigate }: { isActive: (href: string) => boolean; onNavigate?: () => void }) {  const { user, company, followUps, quotes } = useData();
   const router = useRouter();
   const pendingFollowUps = followUps.filter((f) => f.status === 'pendente').length;
 
@@ -278,4 +282,30 @@ function initials(name?: string | null): string {
   const first = parts[0]?.[0] ?? '';
   const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
   return (first + last).toUpperCase() || '?';
+}
+
+/** Banner amarelo com o erro do Supabase — em vez de tela branca, o usuário vê o que falhou. */
+function DataErrorBanner() {
+  const { dataError } = useData();
+  const [hidden, setHidden] = useState(false);
+  if (!dataError || hidden) return null;
+  return (
+    <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-amber-900">Não foi possível carregar os dados do banco</p>
+          <p className="mt-1 break-words text-xs text-amber-800">{dataError}</p>
+          <p className="mt-2 text-xs text-amber-700">
+            Verifique se a migração SQL (<code className="rounded bg-amber-100 px-1">0001_init.sql</code>) foi executada
+            no SQL Editor do Supabase e se as chaves estão corretas (sem espaços). Caso o problema continue, abra o
+            console do navegador (F12) e envie o erro.
+          </p>
+        </div>
+        <button onClick={() => setHidden(true)} className="rounded p-1 text-amber-500 hover:bg-amber-100" aria-label="Fechar aviso">
+          <CloseIcon className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
 }

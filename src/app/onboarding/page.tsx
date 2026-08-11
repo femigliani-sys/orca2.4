@@ -55,7 +55,7 @@ export default function OnboardingPage() {
           router.replace('/app');
           return;
         }
-        const company = await db.getCompany();
+        const company = await db.getCompany().catch(() => null);
         if (mounted) {
           setCompanyName(company?.name ?? user.companyName ?? '');
           setBusinessType(company?.businessType ?? user.businessType ?? '');

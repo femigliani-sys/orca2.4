@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { Sparkles, Plus } from 'lucide-react';
+import { Sparkles, Plus, Database } from 'lucide-react';
 import { useData } from '@/components/providers/data-provider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ function greeting(): string {
 }
 
 export default function DashboardPage() {
-  const { user, company, quotes, customers, loading } = useData();
+  const { user, company, quotes, customers, loading, dataError } = useData();
 
   const monthStart = useMemo(() => {
     const d = new Date();
@@ -75,6 +75,34 @@ export default function DashboardPage() {
           </Link>
         }
       />
+
+      {/* Ajuda de setup do Supabase: aparece quando o banco não respondeu */}
+      {dataError && company === null && (
+        <Card className="border-sky-200 bg-sky-50">
+          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-start">
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white shadow-sm">
+              <Database className="size-5 text-sky-600" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-sky-900">Configuração do Supabase pendente</p>
+              <p className="mt-1 text-sm text-sky-800">
+                O login funcionou, mas o banco de dados não respondeu. O passo mais comum que falta:
+              </p>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-sky-800">
+                <li>
+                  Abra o projeto no <strong>Supabase → SQL Editor</strong>
+                </li>
+                <li>Cole o conteúdo de <code className="rounded bg-sky-100 px-1">supabase/migrations/0001_init.sql</code> (arquivo do projeto)</li>
+                <li>Clique em <strong>Run</strong> e aguarde a mensagem verde de sucesso</li>
+              </ol>
+              <p className="mt-2 text-xs text-sky-700">
+                Depois, volte aqui e recarregue a página (F5). Se o problema persistir, envie o texto do banner amarelo
+                ou o erro do console (F12).
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Limite do plano grátis */}
       {company?.plan === 'free' && remainingFree !== null && remainingFree <= 2 && (

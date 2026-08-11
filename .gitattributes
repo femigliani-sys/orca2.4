@@ -1,0 +1,13 @@
+# Normalização de fim de linha (evita "diff" quebrado entre Windows/Mac/Linux)
+* text=auto
+
+# Binários
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# Arquivos com fim de linha específico
+*.sh text eol=lf

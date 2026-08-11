@@ -1,0 +1,360 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Building2, FileText, Palette, Upload, X } from 'lucide-react';
+import { useData } from '@/components/providers/data-provider';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { db } from '@/lib/db';
+import { BUSINESS_TYPES, VALIDITY_OPTIONS } from '@/lib/constants';
+import { DEFAULT_SETTINGS, DEFAULT_QUOTE_MESSAGE } from '@/lib/defaults';
+import type { CompanySettings } from '@/lib/types';
+
+export default function SettingsPage() {
+  const { company, loading, refresh } = useData();
+  const [tab, setTab] = useState('empresa');
+  const [saving, setSaving] = useState<null | 'empresa' | 'orcamentos' | 'aparencia'>(null);
+
+  // Formulário empresa
+  const [name, setName] = useState('');
+  const [businessType, setBusinessType] = useState('');
+  const [phone, setPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [cnpj, setCnpj] = useState('');
+
+  // Formulário orçamentos
+  const [validity, setValidity] = useState<number>(7);
+  const [defaultMessage, setDefaultMessage] = useState('');
+  const [defaultNotes, setDefaultNotes] = useState('');
+  const [terms, setTerms] = useState('');
+
+  // Formulário aparência
+  const [settings, setSettings] = useState<CompanySettings>({ ...DEFAULT_SETTINGS });
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!company) return;
+    setName(company.name);
+    setBusinessType(company.businessType);
+    setPhone(company.phone ?? '');
+    setWhatsapp(company.whatsapp ?? '');
+    setEmail(company.email ?? '');
+    setAddress(company.address ?? '');
+    setCnpj(company.cnpj ?? '');
+    setValidity(company.settings.quoteValidityDays || 7);
+    setDefaultMessage(company.settings.defaultMessage);
+    setDefaultNotes(company.settings.defaultNotes);
+    setTerms(company.settings.terms);
+    setSettings({ ...DEFAULT_SETTINGS, ...company.settings });
+    setLogoUrl(company.logoUrl);
+  }, [company]);
+
+  if (loading || !company) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-56" />
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    );
+  }
+
+  async function saveEmpresa() {
+    if (!name.trim()) {
+      toast.error('O nome da empresa é obrigatório.');
+      return;
+    }
+    setSaving('empresa');
+    try {
+      await db.updateCompany({
+        name: name.trim(),
+        businessType,
+        phone: phone || undefined,
+        whatsapp: whatsapp || undefined,
+        email: email || undefined,
+        address: address || undefined,
+        cnpj: cnpj || undefined,
+      });
+      refresh();
+      toast.success('Dados da empresa salvos!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível salvar.');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveOrcamentos() {
+    setSaving('orcamentos');
+    try {
+      await db.updateCompany({
+        settings: {
+          ...settings,
+          quoteValidityDays: validity,
+          defaultMessage,
+          defaultNotes,
+          terms,
+        },
+      });
+      refresh();
+      toast.success('Preferências de orçamento salvas!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível salvar.');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveAparencia() {
+    setSaving('aparencia');
+    try {
+      await db.updateCompany({ settings, logoUrl });
+      refresh();
+      toast.success('Aparência salva!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível salvar.');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function handleLogo(file: File | undefined) {
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const url = await db.uploadLogo(file);
+      setLogoUrl(url);
+      await db.updateCompany({ logoUrl: url });
+      refresh();
+      toast.success('Logo atualizada!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível enviar a imagem.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  function toggleSetting(key: keyof CompanySettings) {
+    setSettings((s) => ({ ...s, [key]: !s[key] }));
+  }
+
+  const inputCls = 'mt-1.5';
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Configurações"
+        description="Dados da empresa, padrões de orçamento e aparência do PDF."
+      />
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="empresa"><Building2 className="mr-1.5 size-4" /> Empresa</TabsTrigger>
+          <TabsTrigger value="orcamentos"><FileText className="mr-1.5 size-4" /> Orçamentos</TabsTrigger>
+          <TabsTrigger value="aparencia"><Palette className="mr-1.5 size-4" /> Aparência</TabsTrigger>
+        </TabsList>
+
+        {/* -------------------------------------------------- Empresa */}
+        <TabsContent value="empresa">
+          <Card>
+            <CardHeader>
+              <CardTitle>Dados da empresa</CardTitle>
+              <CardDescription className="mt-1">Esses dados aparecem no PDF e na mensagem enviada.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-name">Nome da empresa *</Label>
+                  <Input id="s-name" className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Tipo de negócio</Label>
+                  <Select value={businessType} onValueChange={setBusinessType}>
+                    <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {BUSINESS_TYPES.map((bt) => (
+                        <SelectItem key={bt} value={bt}>{bt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-phone">Telefone</Label>
+                  <Input id="s-phone" className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 4002-8922" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-wa">WhatsApp</Label>
+                  <Input id="s-wa" className={inputCls} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(11) 99999-9999" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-email">E-mail</Label>
+                  <Input id="s-email" type="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contato@empresa.com.br" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-cnpj">CNPJ</Label>
+                  <Input id="s-cnpj" className={inputCls} value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-address">Endereço</Label>
+                <Input id="s-address" className={inputCls} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Rua, número, bairro, cidade/UF" />
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={saveEmpresa} loading={saving === 'empresa'}>Salvar empresa</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* -------------------------------------------------- Orçamentos */}
+        <TabsContent value="orcamentos">
+          <Card>
+            <CardHeader>
+              <CardTitle>Padrões de orçamento</CardTitle>
+              <CardDescription className="mt-1">Aplicados automaticamente em todo novo orçamento.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Validade padrão</Label>
+                  <Select value={String(validity)} onValueChange={(v) => setValidity(Number(v))}>
+                    <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {VALIDITY_OPTIONS.map((v) => (
+                        <SelectItem key={v.value} value={String(v.value)}>{v.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-msg">Mensagem padrão para o cliente</Label>
+                <Textarea
+                  id="s-msg"
+                  className={inputCls}
+                  rows={6}
+                  value={defaultMessage}
+                  onChange={(e) => setDefaultMessage(e.target.value)}
+                  placeholder={DEFAULT_QUOTE_MESSAGE}
+                />
+                <p className="text-xs text-ink-400">
+                  Placeholders disponíveis: {'{{customer}}'} {'{{items}}'} {'{{total}}'} {'{{validity}}'} {'{{company}}'}. Deixe
+                  vazio para usar o modelo padrão.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-notes">Observações padrão</Label>
+                <Textarea id="s-notes" className={inputCls} rows={2} value={defaultNotes} onChange={(e) => setDefaultNotes(e.target.value)} placeholder="Ex.: Valor não inclui materiais adicionais." />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-terms">Termos padrão</Label>
+                <Textarea id="s-terms" className={inputCls} rows={5} value={terms} onChange={(e) => setTerms(e.target.value)} />
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={saveOrcamentos} loading={saving === 'orcamentos'}>Salvar padrões</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* -------------------------------------------------- Aparência */}
+        <TabsContent value="aparencia">
+          <Card>
+            <CardHeader>
+              <CardTitle>Logotipo</CardTitle>
+              <CardDescription className="mt-1">Usado no PDF e nos orçamentos compartilhados.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              {logoUrl ? (
+                <div className="relative">
+                  <img src={logoUrl} alt="Logo da empresa" className="h-16 w-16 rounded-xl border border-ink-200 object-contain bg-white p-1" />
+                  <button
+                    onClick={async () => {
+                      setLogoUrl(undefined);
+                      await db.updateCompany({ logoUrl: undefined });
+                      refresh();
+                    }}
+                    className="absolute -right-2 -top-2 grid size-5 place-items-center rounded-full bg-ink-900 text-white hover:bg-ink-700"
+                    aria-label="Remover logo"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="grid h-16 w-16 place-items-center rounded-xl border border-dashed border-ink-300 text-ink-300">
+                  <Upload className="size-6" />
+                </div>
+              )}
+              <label className="cursor-pointer">
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogo(e.target.files?.[0])} disabled={uploadingLogo} />
+                <Button asChild variant="secondary">
+                  <span>{uploadingLogo ? 'Enviando…' : logoUrl ? 'Trocar logo' : 'Enviar logo'}</span>
+                </Button>
+              </label>
+              <p className="text-xs text-ink-400">PNG ou JPG, até 2MB.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Informações exibidas no PDF</CardTitle>
+              <CardDescription className="mt-1">Escolha o que aparece no orçamento em PDF.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ToggleRow label="Mostrar logo" checked={settings.showLogo} onChange={() => toggleSetting('showLogo')} />
+                <ToggleRow label="Mostrar telefone" checked={settings.showPhone} onChange={() => toggleSetting('showPhone')} />
+                <ToggleRow label="Mostrar e-mail" checked={settings.showEmail} onChange={() => toggleSetting('showEmail')} />
+                <ToggleRow label="Mostrar endereço" checked={settings.showAddress} onChange={() => toggleSetting('showAddress')} />
+                <ToggleRow label="Mostrar CNPJ" checked={settings.showCnpj} onChange={() => toggleSetting('showCnpj')} />
+                <ToggleRow label="Campo de assinatura" checked={settings.showSignature} onChange={() => toggleSetting('showSignature')} />
+              </div>
+              {settings.showSignature && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-sig">Nome para assinatura</Label>
+                  <Input id="s-sig" className={inputCls} value={settings.signatureName} onChange={(e) => setSettings({ ...settings, signatureName: e.target.value })} placeholder="Ex.: Maria Silva" />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="s-color">Cor de destaque do PDF</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    id="s-color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(settings.accentColor) ? settings.accentColor : '#4f46e5'}
+                    onChange={(e) => setSettings({ ...settings, accentColor: e.target.value })}
+                    className="h-10 w-14 cursor-pointer rounded-lg border border-ink-200 bg-white p-1"
+                  />
+                  <Input value={settings.accentColor} onChange={(e) => setSettings({ ...settings, accentColor: e.target.value })} className="w-32" />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={saveAparencia} loading={saving === 'aparencia'}>Salvar aparência</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-ink-100 bg-ink-50/40 px-4 py-3">
+      <span className="text-sm font-medium text-ink-700">{label}</span>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
+}

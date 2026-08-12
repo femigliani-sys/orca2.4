@@ -37,19 +37,68 @@ const REQUIRED_ERROR = 'Sessão expirada. Entre novamente.';
 
 export function createSupabaseDB(client: SupabaseClient): DB {
   // ------------------------------------------------------------ Helpers
+
+  /**
+   * Busca a empresa do usuário logado.
+   * AUTO-CURA: se o usuário não tiver uma empresa (ex.: conta criada antes
+   * da migração, ou confirmação de e-mail que impediu a criação no cadastro),
+   * cria a linha na hora usando os metadados do cadastro. Isso elimina o
+   * erro "Empresa não encontrada" que travava o cadastro de serviços.
+   */
+  async function ensureCompany(userId: string): Promise<CompaniesRow> {
+    const { data: existing } = await client
+      .from('companies')
+      .select('*')
+      .eq('owner_id', userId)
+      .maybeSingle();
+
+    if (existing) return existing as CompaniesRow;
+
+    // Não encontrou → tenta criar (agora o usuário está autenticado, RLS passa)
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
+    const name = (meta.company_name as string) || 'Minha empresa';
+    const businessType = (meta.business_type as string) || 'Profissional autônomo';
+
+    const { data: inserted, error: insertError } = await client
+      .from('companies')
+      .insert({
+        owner_id: userId,
+        name,
+        business_type: businessType,
+        settings: { ...DEFAULT_SETTINGS },
+        plan: 'free',
+        quote_counter: 0,
+        onboarded: false,
+      })
+      .select()
+      .maybeSingle();
+
+    if (insertError) {
+      // Pode ter corrido uma corrida (duas chamadas criando juntas) — tenta buscar de novo
+      const { data: retry } = await client
+        .from('companies')
+        .select('*')
+        .eq('owner_id', userId)
+        .maybeSingle();
+      if (retry) return retry as CompaniesRow;
+      throw new Error(`Não foi possível criar a empresa no Supabase: ${insertError.message}`);
+    }
+
+    if (inserted) return inserted as CompaniesRow;
+    throw new Error('Empresa não encontrada e não foi possível criá-la.');
+  }
+
   async function requireCompany(): Promise<{ userId: string; company: CompaniesRow }> {
     const {
       data: { user },
       error,
     } = await client.auth.getUser();
     if (error || !user) throw new Error(REQUIRED_ERROR);
-    const { data: company, error: cError } = await client
-      .from('companies')
-      .select('*')
-      .eq('owner_id', user.id)
-      .single();
-    if (cError || !company) throw new Error('Empresa não encontrada.');
-    return { userId: user.id, company: company as CompaniesRow };
+    const company = await ensureCompany(user.id);
+    return { userId: user.id, company };
   }
 
   function mapCompany(row: CompaniesRow): Company {
@@ -226,6 +275,15 @@ export function createSupabaseDB(client: SupabaseClient): DB {
       });
       if (error) throw error;
       if (!data.user) throw new Error('Não foi possível criar a conta.');
+
+      // Se a confirmação de e-mail estiver ATIVA, o Supabase não retorna sessão
+      // aqui — e o RLS impede criar a empresa com auth.uid() nulo. Nesse caso,
+      // a empresa é criada automaticamente no primeiro login (auto-cura).
+      const {
+        data: { session },
+      } = await client.auth.getSession();
+      if (!session) return;
+
       const { error: cError } = await client.from('companies').insert({
         owner_id: data.user.id,
         name: companyName.trim(),
@@ -235,7 +293,11 @@ export function createSupabaseDB(client: SupabaseClient): DB {
         quote_counter: 0,
         onboarded: false,
       });
-      if (cError) throw cError;
+      if (cError) {
+        // Se a criação falhar por qualquer motivo (ex.: RLS), não bloqueia o
+        // cadastro — o auto-cura cria a empresa no primeiro uso.
+        console.warn('[signUp] não foi possível criar a empresa agora:', cError.message);
+      }
     },
 
     async signIn(email, password) {
@@ -264,12 +326,15 @@ export function createSupabaseDB(client: SupabaseClient): DB {
         data: { user },
       } = await client.auth.getUser();
       if (!user) return null;
-      const { data: company } = await client
-        .from('companies')
-        .select('*')
-        .eq('owner_id', user.id)
-        .single();
-      const c = company as CompaniesRow | null;
+
+      // Auto-cura: garante que a empresa exista (nunca retorna null sem motivo)
+      let c: CompaniesRow | null = null;
+      try {
+        c = await ensureCompany(user.id);
+      } catch (err) {
+        console.warn('[getCurrentUser] empresa indisponível:', err instanceof Error ? err.message : err);
+      }
+
       return {
         id: user.id,
         name: (user.user_metadata.name as string) ?? '',

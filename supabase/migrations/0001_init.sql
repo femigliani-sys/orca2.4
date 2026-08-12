@@ -33,6 +33,9 @@ create table if not exists public.companies (
 );
 
 create index if not exists companies_owner_idx on public.companies(owner_id);
+-- Uma empresa por dono (evita duplicatas que travavam o onboarding)
+alter table public.companies drop constraint if exists companies_owner_unique;
+alter table public.companies add constraint companies_owner_unique unique (owner_id);
 
 -- SERVICES
 create table if not exists public.services (

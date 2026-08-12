@@ -40,21 +40,37 @@ export function createSupabaseDB(client: SupabaseClient): DB {
 
   /**
    * Busca a empresa do usuário logado.
-   * AUTO-CURA: se o usuário não tiver uma empresa (ex.: conta criada antes
-   * da migração, ou confirmação de e-mail que impediu a criação no cadastro),
-   * cria a linha na hora usando os metadados do cadastro. Isso elimina o
-   * erro "Empresa não encontrada" que travava o cadastro de serviços.
+   * AUTO-CURA + ANTI-CORRIDA:
+   * - Se o usuário não tiver empresa, cria uma (usando os metadados do cadastro).
+   * - NUNCA usa maybeSingle: busca como lista para detectar/limpar duplicatas
+   *   (evita o loop de "volta para o onboarding" quando há 2+ linhas).
+   * - Se houver duplicatas (ex.: criadas por requisições paralelas), mantém a
+   *   mais antiga e apaga o resto.
    */
   async function ensureCompany(userId: string): Promise<CompaniesRow> {
-    const { data: existing } = await client
+    const { data: rows, error: selError } = await client
       .from('companies')
       .select('*')
-      .eq('owner_id', userId)
-      .maybeSingle();
+      .eq('owner_id', userId);
 
-    if (existing) return existing as CompaniesRow;
+    if (selError) {
+      throw new Error(`Falha ao consultar a empresa: ${selError.message}`);
+    }
 
-    // Não encontrou → tenta criar (agora o usuário está autenticado, RLS passa)
+    if (rows && rows.length > 0) {
+      if (rows.length > 1) {
+        // Corrige duplicatas: mantém a mais antiga e remove as demais
+        const sorted = [...(rows as CompaniesRow[])].sort((a, b) =>
+          (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+        );
+        const keep = sorted[0];
+        await client.from('companies').delete().eq('owner_id', userId).neq('id', keep.id);
+        return keep;
+      }
+      return rows[0] as CompaniesRow;
+    }
+
+    // Não existe → cria
     const {
       data: { user },
     } = await client.auth.getUser();
@@ -73,21 +89,24 @@ export function createSupabaseDB(client: SupabaseClient): DB {
         quote_counter: 0,
         onboarded: false,
       })
-      .select()
-      .maybeSingle();
+      .select();
 
-    if (insertError) {
-      // Pode ter corrido uma corrida (duas chamadas criando juntas) — tenta buscar de novo
-      const { data: retry } = await client
-        .from('companies')
-        .select('*')
-        .eq('owner_id', userId)
-        .maybeSingle();
-      if (retry) return retry as CompaniesRow;
-      throw new Error(`Não foi possível criar a empresa no Supabase: ${insertError.message}`);
+    if (!insertError && inserted && inserted.length > 0) {
+      return inserted[0] as CompaniesRow;
     }
 
-    if (inserted) return inserted as CompaniesRow;
+    // Se falhou (ex.: corrida com outra requisição que já criou), tenta ler de novo
+    const { data: retry } = await client
+      .from('companies')
+      .select('*')
+      .eq('owner_id', userId);
+    if (retry && retry.length > 0) {
+      return retry[0] as CompaniesRow;
+    }
+
+    if (insertError) {
+      throw new Error(`Não foi possível criar a empresa: ${insertError.message}`);
+    }
     throw new Error('Empresa não encontrada e não foi possível criá-la.');
   }
 
@@ -381,11 +400,25 @@ export function createSupabaseDB(client: SupabaseClient): DB {
     },
 
     async completeOnboarding(patch) {
-      await this.updateCompany({ ...patch, settings: patch.settings });
-      await client
+      // Atualização ÚNICA e atômica: nome + tipo + onboarded=true.
+      // Antes eram 2 updates separados e o segundo podia falhar em silêncio,
+      // deixando onboarded=false → o app "voltava" para o onboarding.
+      const { company } = await requireCompany();
+      const { data, error } = await client
         .from('companies')
-        .update({ onboarded: true })
-        .eq('owner_id', (await client.auth.getUser()).data.user?.id ?? '');
+        .update({
+          name: patch.name ?? company.name,
+          business_type: patch.businessType ?? company.business_type,
+          onboarded: true,
+          settings: { ...company.settings, ...(patch.settings ?? {}) },
+        })
+        .eq('id', company.id)
+        .select()
+        .single();
+      if (error) {
+        throw new Error(`Não foi possível concluir o onboarding: ${error.message}`);
+      }
+      return undefined;
     },
 
     async uploadLogo(file) {

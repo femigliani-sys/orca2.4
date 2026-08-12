@@ -97,6 +97,14 @@ export default function OnboardingPage() {
         name: companyName.trim(),
         businessType,
       });
+
+      // Verifica se o onboarding realmente foi salvo (evita o loop
+      // "volta para a tela de cadastro" se o Supabase falhar em silêncio)
+      const after = await db.getCurrentUser().catch(() => null);
+      if (!after?.onboarded) {
+        throw new Error('O sistema não confirmou a conclusão do onboarding. Tente novamente.');
+      }
+
       if (!skipServices) {
         const valid = services.filter((s) => s.name.trim() && s.price.trim());
         for (const s of valid) {

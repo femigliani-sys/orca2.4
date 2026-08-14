@@ -9,6 +9,7 @@ import type {
   FollowUp,
   GeneratedMessage,
   Notification,
+  Payment,
   PlanId,
   Quote,
   QuoteInput,
@@ -27,6 +28,7 @@ import type {
   FollowUpsRow,
   MessagesRow,
   NotificationsRow,
+  PaymentsRow,
   QuoteItemsRow,
   QuotesRow,
   ServicesRow,
@@ -948,6 +950,36 @@ export function createSupabaseDB(client: SupabaseClient): DB {
         });
       }
       await client.from('companies').update({ plan }).eq('id', company.id);
+    },
+
+    async listPayments() {
+      const { company } = await requireCompany();
+      const { data, error } = await client
+        .from('payments')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return ((data as PaymentsRow[]) ?? []).map((p) => ({
+        id: p.id,
+        companyId: p.company_id,
+        plan: p.plan as PlanId,
+        amount: Number(p.amount),
+        status: p.status as Payment['status'],
+        provider: p.provider,
+        providerId: p.provider_id,
+        createdAt: p.created_at,
+        paidAt: p.paid_at,
+      }));
+    },
+
+    async cancelSubscription() {
+      const { company } = await requireCompany();
+      await client
+        .from('subscriptions')
+        .update({ status: 'cancelado' })
+        .eq('company_id', company.id);
+      await client.from('companies').update({ plan: 'free' }).eq('id', company.id);
     },
 
     // No modo Supabase o checkout real é feito pela API route

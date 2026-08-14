@@ -142,3 +142,15 @@ export interface SubscriptionsRow {
   provider: string | null;
   provider_id: string | null;
 }
+
+export interface PaymentsRow {
+  id: string;
+  company_id: string;
+  plan: string;
+  amount: number;
+  status: string;
+  provider: string | null;
+  provider_id: string | null;
+  created_at: string;
+  paid_at: string | null;
+}

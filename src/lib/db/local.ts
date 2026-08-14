@@ -10,6 +10,7 @@ import type {
   FollowUp,
   GeneratedMessage,
   Notification,
+  Payment,
   PlanId,
   Quote,
   QuoteInput,
@@ -25,6 +26,7 @@ import { addDaysIso, generateId, isValidIsoDate, nowIso } from '../utils';
 import { FREE_MONTHLY_QUOTES } from '../constants';
 import { buildQuote, computeTotals, suggestedFollowUpDate } from '../quote-utils';
 import { sideEffectsFor, monthStart } from '../side-effects';
+import { getPlan } from '../plans';
 import type { DB } from './types';
 
 // ---------------------------------------------------------------- Storage
@@ -86,6 +88,7 @@ interface UserData {
   notifications: Notification[];
   messages: GeneratedMessage[];
   subscription: Subscription | null;
+  payments: Payment[];
   pendingCheckout?: { id: string; plan: PlanId } | null;
 }
 
@@ -100,6 +103,7 @@ function emptyUserData(company: Company): UserData {
     notifications: [],
     messages: [],
     subscription: null,
+    payments: [],
   };
 }
 
@@ -144,6 +148,7 @@ function normalizeData(data: UserData): UserData {
     followUps: Array.isArray(data.followUps) ? data.followUps : [],
     notifications: Array.isArray(data.notifications) ? data.notifications : [],
     messages: Array.isArray(data.messages) ? data.messages : [],
+    payments: Array.isArray(data.payments) ? data.payments : [],
     pendingCheckout: data.pendingCheckout ?? null,
     quotes: Array.isArray(data.quotes)
       ? data.quotes.map((q) => ({
@@ -639,6 +644,17 @@ export const localDB: DB = {
       provider: 'simulado',
       providerId: checkoutId,
     };
+    data.payments.unshift({
+      id: checkoutId,
+      companyId: data.company.id,
+      plan,
+      amount: getPlan(plan).price,
+      status: 'pendente',
+      provider: 'simulado',
+      providerId: checkoutId,
+      createdAt: nowIso(),
+      paidAt: null,
+    });
     saveData(userId, data);
     notify();
     return { simulated: true, checkoutId };
@@ -661,13 +677,40 @@ export const localDB: DB = {
       providerId: checkoutId,
     };
     data.company = { ...data.company, plan };
+    data.payments = data.payments.map((p) =>
+      p.id === checkoutId ? { ...p, status: 'aprovado', paidAt: nowIso() } : p,
+    );
     data.pendingCheckout = null;
     data.notifications.unshift({
       id: generateId(),
       companyId: data.company.id,
       type: 'plan',
       title: 'Pagamento aprovado 🎉',
-      body: `Seu plano ${plan} foi ativado. Recursos liberados!`,
+      body: `Seu plano ${getPlan(plan).name} foi ativado. Recursos liberados!`,
+      link: '/app/planos',
+      read: false,
+      createdAt: nowIso(),
+    });
+    saveData(userId, data);
+    notify();
+  },
+
+  async listPayments() {
+    return [...(getData()?.payments ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  async cancelSubscription() {
+    const { userId, data } = requireData();
+    if (data.subscription) {
+      data.subscription.status = 'cancelado';
+    }
+    data.company = { ...data.company, plan: 'free' };
+    data.notifications.unshift({
+      id: generateId(),
+      companyId: data.company.id,
+      type: 'plan',
+      title: 'Assinatura cancelada',
+      body: 'Sua assinatura foi cancelada e você voltou ao plano gratuito.',
       link: '/app/planos',
       read: false,
       createdAt: nowIso(),

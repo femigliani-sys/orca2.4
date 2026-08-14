@@ -4,6 +4,7 @@ import type {
   FollowUp,
   GeneratedMessage,
   Notification,
+  Payment,
   PlanId,
   Quote,
   QuoteInput,
@@ -83,6 +84,10 @@ export interface DB {
   // --------------------------------------------------------- Assinatura
   getSubscription(): Promise<Subscription | null>;
   setPlan(plan: PlanId): Promise<void>;
+  /** Lista o histórico de pagamentos da empresa. */
+  listPayments(): Promise<Payment[]>;
+  /** Cancela a assinatura (plano volta para free). */
+  cancelSubscription(): Promise<void>;
   /**
    * Inicia um checkout.
    * - Modo demonstração: retorna { simulated: true } e registra a compra pendente.

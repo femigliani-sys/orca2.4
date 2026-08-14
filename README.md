@@ -28,8 +28,12 @@ preços cadastrados pela própria empresa**.
 - **Meus serviços** (CRUD, duplicar, ativar/desativar, categorias)
 - **Configurações** da empresa, padrões de orçamento e aparência do PDF
 - **Planos** (Grátis / Pro R$59 / Business R$99) com preços centralizados em um arquivo
-- **Pagamentos via Mercado Pago** (Checkout Pro): Pix, cartão ou boleto, com webhook que ativa o
-  plano automaticamente — e **checkout simulado** no modo demonstração
+- **Sistema de compra completo**:
+  - Página de checkout dedicada (`/app/planos/checkout?plan=pro`) com escolha de **Pix, cartão ou boleto**
+  - **Assinatura recorrente mensal** via Mercado Pago (preapproval) com fallback para Checkout Pro
+  - Webhook que **ativa o plano automaticamente** ao aprovar e registra o pagamento
+  - **Histórico de pagamentos** e **cancelamento de assinatura** em um clique
+  - **Modo simulado** (sem chave do MP): fluxo completo testável com aviso claro
 - **Notificações** in-app (follow-ups pendentes, status, pagamento aprovado, limite do plano)
 
 ---
@@ -83,15 +87,17 @@ NEXT_PUBLIC_SUPABASE_URL=          # URL do projeto (Settings > API)
 NEXT_PUBLIC_SUPABASE_ANON_KEY=     # chave pública (anônima)
 OPENAI_API_KEY=                    # chave da OpenAI (fica SÓ no servidor)
 NEXT_PUBLIC_SITE_URL=https://seu-dominio.vercel.app
-# Pagamentos (Mercado Pago — Checkout Pro)
+# Pagamentos (Mercado Pago — assinatura recorrente + Checkout Pro)
 MERCADO_PAGO_ACCESS_TOKEN=
 NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY=
 ```
 
-> 💳 **Pagamentos:** para ativar, crie um app em [mercadopago.com.br/developers](https://www.mercadopago.com.br/developers)
-> e copie o *Access Token* (produção). Configure o webhook para receber notificações de pagamento
-> em `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** no modo
-> demonstração. Após ativar, rode também a migração `supabase/migrations/0002_payments.sql`.
+> 💳 **Pagamentos:** crie um app em [mercadopago.com.br/developers](https://www.mercadopago.com.br/developers)
+> e copie o *Access Token* (produção). Com a chave no servidor (`MERCADO_PAGO_ACCESS_TOKEN`), o checkout
+> cria uma **assinatura recorrente** (preapproval) — cobrança mensal automática — com fallback para
+> pagamento único (Checkout Pro). Configure o webhook do MP para
+> `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** (com aviso).
+> Migrações necessárias: `0001`, `0002`, `0003`, `0004`.
 
 > Sem `OPENAI_API_KEY` o app usa o interpretador local — o produto continua 100% funcional.
 
@@ -179,7 +185,7 @@ modo produção implementam a mesma interface — a troca é transparente.
 
 ## 🛣️ Próximos passos (pós-MVP)
 
-- [x] Checkout de assinaturas com **Mercado Pago** (Pix/cartão/boleto) — webhook validado e ativação automática
+- [x] Sistema de compra com **Mercado Pago** (assinatura recorrente, checkout, histórico e cancelamento)
 - [ ] Assinaturas recorrentes automáticas (renovação mensal sem ação do usuário)
 - [ ] **WhatsApp Business API** (Cloud API) para envio oficial e templates
 - [ ] Múltiplos usuários e permissões (plano Business)
@@ -193,4 +199,4 @@ modo produção implementam a mesma interface — a troca é transparente.
 
 Next.js 14 (App Router) · TypeScript · Tailwind CSS · shadcn/ui (Radix) · Lucide Icons ·
 Supabase (PostgreSQL + Auth + Storage + RLS) · OpenAI API · jsPDF · Recharts · Zod ·
-Mercado Pago (futuro) · Deploy: Vercel
+Mercado Pago · Deploy: Vercel

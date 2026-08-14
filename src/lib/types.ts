@@ -173,6 +173,20 @@ export interface GeneratedMessage {
   createdAt: string;
 }
 
+export type PaymentStatus = 'pendente' | 'aprovado' | 'recusado' | 'cancelado' | 'reembolsado';
+
+export interface Payment {
+  id: ID;
+  companyId: ID;
+  plan: PlanId;
+  amount: number; // R$
+  status: PaymentStatus;
+  provider?: string | null;
+  providerId?: string | null;
+  createdAt: string;
+  paidAt?: string | null;
+}
+
 // ---------------------------------------------------------------- Assinatura
 export type PlanId = 'free' | 'pro' | 'business';
 

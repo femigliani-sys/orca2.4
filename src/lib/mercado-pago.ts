@@ -99,3 +99,80 @@ export async function getPayment(paymentId: string): Promise<MpPayment | null> {
   const data = (await res.json()) as MpPayment;
   return data;
 }
+
+// ---------------------------------------------------------------- Assinatura
+
+export interface Preapproval {
+  id: string;
+  status: string;
+  init_point: string | null;
+  external_reference: string | null;
+}
+
+/**
+ * Cria uma ASSINATURA recorrente (preapproval) no Mercado Pago.
+ * Cobra automaticamente a cada mês — é o fluxo certo para SaaS.
+ */
+export async function createPreapproval(input: {
+  plan: PlanId;
+  companyId: string;
+  email?: string;
+}): Promise<Preapproval> {
+  const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  if (!token) throw new Error('Mercado Pago não configurado no servidor.');
+
+  const plan = getPlan(input.plan);
+  const res = await fetch(`${API}/preapproval`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      reason: `OrçaAI — Plano ${plan.name} (assinatura mensal)`,
+      external_reference: `${input.companyId}:${input.plan}`,
+      payer_email: input.email,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: planPriceCents(plan),
+        currency_id: 'BRL',
+      },
+      back_url: `${siteUrl()}/app/planos?status=success`,
+      notification_url: `${siteUrl()}/api/billing/webhook`,
+      metadata: { company_id: input.companyId, plan: input.plan, app: 'orcaai' },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao criar a assinatura (${res.status}). ${text.slice(0, 200)}`);
+  }
+
+  return (await res.json()) as Preapproval;
+}
+
+/** Cancela uma assinatura (preapproval) — para quando o usuário cancela o plano. */
+export async function cancelPreapproval(preapprovalId: string): Promise<void> {
+  const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  if (!token) return;
+  await fetch(`${API}/preapproval/${preapprovalId}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ status: 'cancelled' }),
+  });
+}
+
+/** Busca uma assinatura (preapproval) — usado no webhook. */
+export async function getPreapproval(preapprovalId: string): Promise<Preapproval | null> {
+  const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  if (!token) return null;
+  const res = await fetch(`${API}/preapproval/${preapprovalId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as Preapproval;
+}

@@ -1,18 +1,19 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Check, Gem, Sparkles, CreditCard, Lock, QrCode, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
+import { Check, Gem, CreditCard, Lock, ArrowRight, Loader2, CheckCircle2, XCircle, Receipt } from 'lucide-react';
 import { useData } from '@/components/providers/data-provider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { db, isDemo } from '@/lib/db';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { db } from '@/lib/db';
 import { PLANS, formatPlanPrice, getPlan } from '@/lib/plans';
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import type { PlanId } from '@/lib/types';
 
 export default function PlansPage() {
@@ -36,18 +37,34 @@ function PlansPageContent() {
   const { company, loading, refresh } = useData();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [choosing, setChoosing] = useState<PlanId | null>(null);
-  const [applying, setApplying] = useState(false);
-  const [simCheckout, setSimCheckout] = useState<{ checkoutId: string; plan: PlanId } | null>(null);
-  const [simPaying, setSimPaying] = useState(false);
+  const [payments, setPayments] = useState<Awaited<ReturnType<typeof db.listPayments>>>([]);
+  const [subscription, setSubscription] = useState<Awaited<ReturnType<typeof db.getSubscription>>>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [statusBanner, setStatusBanner] = useState<'success' | 'pending' | 'failure' | null>(null);
+
+  const loadBilling = useCallback(async () => {
+    try {
+      const [p, s] = await Promise.all([db.listPayments(), db.getSubscription()]);
+      setPayments(p);
+      setSubscription(s);
+    } catch {
+      // silencioso — banner de dados cobre
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBilling();
+  }, [loadBilling]);
 
   useEffect(() => {
     const status = searchParams.get('status');
     if (status === 'success' || status === 'pending' || status === 'failure') {
       setStatusBanner(status);
-      if (status === 'success') refresh();
-      // limpa a URL
+      if (status === 'success') {
+        refresh();
+        loadBilling();
+      }
       router.replace('/app/planos');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,66 +81,22 @@ function PlansPageContent() {
 
   const currentCompany = company;
   const currentPlan = getPlan(currentCompany.plan);
+  const sub = subscription;
 
-  async function choosePlan(plan: PlanId) {
-    if (plan === currentCompany.plan) return;
-    setChoosing(plan);
-    setApplying(true);
+  async function cancelSubscription() {
+    setCancelling(true);
     try {
-      if (plan === 'free') {
-        // Voltar para o grátis é imediato (sem pagamento)
-        await db.setPlan('free');
-        refresh();
-        toast.success('Você voltou ao plano gratuito.');
-        setChoosing(null);
-        return;
-      }
-
-      if (isDemo()) {
-        // Modo demonstração: checkout simulado
-        const res = await db.startCheckout({ plan });
-        if (res.simulated && res.checkoutId) {
-          setSimCheckout({ checkoutId: res.checkoutId, plan });
-        }
-        setChoosing(null);
-        return;
-      }
-
-      // Produção: checkout real via Mercado Pago
-      const res = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { initPoint?: string; error?: string };
-      if (!res.ok || !json.initPoint) {
-        throw new Error(json.error || 'Não foi possível iniciar o pagamento.');
-      }
-      window.location.href = json.initPoint; // redireciona para o Checkout Pro
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Não foi possível iniciar o checkout.');
-      setChoosing(null);
-    } finally {
-      setApplying(false);
-    }
-  }
-
-  async function simulatePay() {
-    if (!simCheckout) return;
-    setSimPaying(true);
-    try {
-      await db.completeCheckout({ checkoutId: simCheckout.checkoutId });
+      await db.cancelSubscription();
       refresh();
-      toast.success('Pagamento aprovado! Bem-vindo ao plano Pro 🎉');
-      setSimCheckout(null);
+      await loadBilling();
+      setConfirmCancel(false);
+      toast.success('Assinatura cancelada. Você voltou ao plano gratuito.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Não foi possível concluir o pagamento.');
+      toast.error(err instanceof Error ? err.message : 'Não foi possível cancelar.');
     } finally {
-      setSimPaying(false);
+      setCancelling(false);
     }
   }
-
-  const simPlan = simCheckout ? getPlan(simCheckout.plan) : null;
 
   return (
     <div className="space-y-6">
@@ -132,7 +105,7 @@ function PlansPageContent() {
         description="Escolha o plano ideal para o seu momento. Cancele quando quiser."
       />
 
-      {/* Banners de retorno do Mercado Pago */}
+      {/* Banners de retorno do pagamento */}
       {statusBanner === 'success' && (
         <Card className="border-emerald-200 bg-emerald-50">
           <CardContent className="flex items-center gap-3 p-4">
@@ -148,8 +121,7 @@ function PlansPageContent() {
           <CardContent className="flex items-center gap-3 p-4">
             <Loader2 className="size-5 shrink-0 animate-spin text-amber-600" />
             <p className="text-sm text-amber-800">
-              <strong>Pagamento pendente.</strong> Assim que o pagamento for confirmado, seu plano é ativado
-              automaticamente.
+              <strong>Pagamento pendente.</strong> Assim que for confirmado, seu plano é ativado automaticamente.
             </p>
           </CardContent>
         </Card>
@@ -157,6 +129,7 @@ function PlansPageContent() {
       {statusBanner === 'failure' && (
         <Card className="border-rose-200 bg-rose-50">
           <CardContent className="flex items-center gap-3 p-4">
+            <XCircle className="size-5 shrink-0 text-rose-600" />
             <p className="text-sm text-rose-800">
               <strong>Pagamento não concluído.</strong> Você pode tentar novamente — nenhum valor foi cobrado sem sua
               confirmação.
@@ -165,6 +138,7 @@ function PlansPageContent() {
         </Card>
       )}
 
+      {/* Status da assinatura */}
       <Card className="border-brand-200 bg-brand-50/60">
         <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -176,18 +150,33 @@ function PlansPageContent() {
                 Seu plano atual: <span className="text-brand-700">{currentPlan.name}</span>
               </p>
               <p className="text-xs text-ink-500">
-                {company.plan === 'free'
-                  ? 'Até 5 orçamentos por mês, 10 serviços e 30 clientes.'
-                  : 'Todos os recursos liberados.'}
+                {currentCompany.plan === 'free' ? (
+                  'Até 5 orçamentos por mês, 10 serviços e 30 clientes.'
+                ) : sub?.renewsAt ? (
+                  `Assinatura ativa · renova em ${formatDate(sub.renewsAt)}`
+                ) : (
+                  'Todos os recursos liberados.'
+                )}
               </p>
+              {sub?.status === 'pendente' && (
+                <Badge variant="warning" className="mt-1">Pagamento pendente de confirmação</Badge>
+              )}
+              {sub?.status === 'cancelado' && currentCompany.plan === 'free' && (
+                <Badge variant="secondary" className="mt-1">Assinatura cancelada</Badge>
+              )}
             </div>
           </div>
+          {currentCompany.plan !== 'free' && (
+            <Button variant="secondary" onClick={() => setConfirmCancel(true)} className="shrink-0">
+              Cancelar assinatura
+            </Button>
+          )}
         </CardContent>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {PLANS.map((plan) => {
-          const isCurrent = company.plan === plan.id;
+          const isCurrent = currentCompany.plan === plan.id;
           return (
             <div
               key={plan.id}
@@ -224,17 +213,23 @@ function PlansPageContent() {
               <Button
                 className={`mt-8 w-full ${plan.highlighted ? 'bg-brand-500 hover:bg-brand-400' : ''}`}
                 variant={plan.highlighted ? 'default' : 'secondary'}
-                disabled={isCurrent || applying}
-                loading={choosing === plan.id && applying}
-                onClick={() => choosePlan(plan.id)}
+                disabled={isCurrent}
+                onClick={() => {
+                  if (plan.id === 'free') {
+                    setConfirmCancel(true);
+                  } else {
+                    router.push(`/app/planos/checkout?plan=${plan.id}`);
+                  }
+                }}
               >
-                {isCurrent ? 'Plano atual' : plan.id === 'free' ? 'Voltar para o grátis' : `Assinar ${plan.name} — ${formatPlanPrice(plan)}/mês`}
+                {isCurrent ? 'Plano atual' : plan.id === 'free' ? 'Voltar para o grátis' : `Assinar ${plan.name}`}
               </Button>
             </div>
           );
         })}
       </div>
 
+      {/* Info de pagamento */}
       <Card>
         <CardContent className="space-y-3 p-5">
           <div className="flex items-start gap-3">
@@ -244,28 +239,14 @@ function PlansPageContent() {
             <div>
               <p className="text-sm font-semibold text-ink-900">Pagamento via Mercado Pago</p>
               <p className="mt-1 text-sm text-ink-500">
-                Pagamento com <strong>Pix, cartão de crédito ou boleto</strong>, processado pelo Mercado Pago com toda a
-                segurança. A assinatura é mensal e pode ser cancelada quando quiser.
+                Pagamento com <strong>Pix, cartão de crédito ou boleto</strong>, processado pelo Mercado Pago com
+                assinatura recorrente mensal.
               </p>
               <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-400">
                 <Lock className="size-3.5" /> Seus dados de pagamento ficam protegidos e processados pelo Mercado Pago.
               </p>
             </div>
           </div>
-          {isDemo() && (
-            <div className="flex items-start gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-amber-50">
-                <Sparkles className="size-5 text-amber-600" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-ink-900">Modo demonstração</p>
-                <p className="mt-1 text-sm text-ink-500">
-                  Você está sem chaves do Mercado Pago, então o checkout é <strong>simulado</strong> — o plano é ativado
-                  na hora. Em produção, o usuário é redirecionado para o checkout real.
-                </p>
-              </div>
-            </div>
-          )}
           <div className="flex items-start gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-ink-100">
               <ArrowRight className="size-5 text-ink-600" />
@@ -280,37 +261,57 @@ function PlansPageContent() {
         </CardContent>
       </Card>
 
-      {/* Modal de pagamento simulado (modo demonstração) */}
-      <Dialog open={simCheckout !== null} onOpenChange={(o) => !o && setSimCheckout(null)}>
-        <DialogContent className="max-w-sm text-center">
-          <DialogHeader className="items-center">
-            <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-brand-50">
-              <QrCode className="size-8 text-brand-600" />
-            </span>
-            <DialogTitle className="mt-3">Pagamento {simPlan ? `— Plano ${simPlan.name}` : ''}</DialogTitle>
-            <DialogDescription>
-              {isDemo()
-                ? 'Este é um checkout de demonstração. Em produção você pagaria via Pix ou cartão no Mercado Pago.'
-                : 'Aguarde a confirmação do pagamento.'}
-            </DialogDescription>
-          </DialogHeader>
-          {simPlan && (
-            <div className="mx-auto w-full max-w-[220px] rounded-xl border border-ink-100 bg-ink-50/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-ink-400">Valor</p>
-              <p className="mt-1 text-2xl font-bold text-ink-950">{formatPlanPrice(simPlan)}/mês</p>
-              <p className="mt-1 text-xs text-ink-400">Pix · Cartão · Boleto</p>
-            </div>
+      {/* Histórico de pagamentos */}
+      <Card>
+        <CardContent className="p-5">
+          <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+            <Receipt className="size-4 text-ink-400" /> Histórico de pagamentos
+          </p>
+          {payments.length === 0 ? (
+            <p className="mt-3 rounded-xl bg-ink-50 p-4 text-center text-xs text-ink-400">
+              Nenhum pagamento registrado ainda. Assine um plano para ver o histórico aqui.
+            </p>
+          ) : (
+            <ul className="mt-3 divide-y divide-ink-100">
+              {payments.slice(0, 8).map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className={`size-2 rounded-full ${p.status === 'aprovado' ? 'bg-emerald-500' : p.status === 'pendente' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                    <span className="font-medium text-ink-900">Plano {getPlan(p.plan).name}</span>
+                    <span className="text-xs text-ink-400">· {formatDateTime(p.createdAt)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-ink-900">{formatCurrency(p.amount)}</span>
+                    <Badge
+                      variant={p.status === 'aprovado' ? 'success' : p.status === 'pendente' ? 'warning' : 'danger'}
+                    >
+                      {p.status === 'aprovado' ? 'Aprovado' : p.status === 'pendente' ? 'Pendente' : 'Recusado'}
+                    </Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-          <DialogFooter className="mt-2 justify-center">
-            <Button variant="secondary" onClick={() => setSimCheckout(null)} disabled={simPaying}>
-              Cancelar
-            </Button>
-            <Button onClick={simulatePay} loading={simPaying} className="bg-emerald-600 hover:bg-emerald-700">
-              <CheckCircle2 className="size-4" /> Simular pagamento aprovado
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={confirmCancel}
+        onOpenChange={setConfirmCancel}
+        title={
+          currentCompany.plan === 'free'
+            ? 'Voltar para o plano gratuito?'
+            : `Cancelar assinatura do ${currentPlan.name}?`
+        }
+        description={
+          currentCompany.plan === 'free'
+            ? 'Você já está no plano gratuito.'
+            : 'Sua assinatura será cancelada e o acesso aos recursos pagos será removido. Você pode assinar novamente quando quiser.'
+        }
+        confirmLabel={currentCompany.plan === 'free' ? 'Confirmar' : 'Cancelar assinatura'}
+        loading={cancelling}
+        onConfirm={cancelSubscription}
+      />
     </div>
   );
 }

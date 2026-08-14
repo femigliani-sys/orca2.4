@@ -120,6 +120,7 @@ export interface Quote {
   updatedAt: string;
   viewedAt?: string | null;
   approvedAt?: string | null;
+  shareToken?: string; // link público (plano Pro+)
 }
 
 export interface QuoteInput {
@@ -228,6 +229,7 @@ export interface Plan {
     metrics: boolean;
     multiUser: boolean;
     automations: boolean;
+    shareLinks: boolean;
   };
   highlighted?: boolean;
 }

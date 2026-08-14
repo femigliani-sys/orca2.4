@@ -773,6 +773,20 @@ async function applyQuoteSideEffects(userId: string, data: UserData, quote: Quot
   }
 }
 
+/**
+ * Busca um orçamento pelo token público (modo demonstração).
+ * Funciona porque a página pública roda no mesmo navegador/origem.
+ */
+export function localGetQuoteByShareToken(token: string): { quote: Quote; company: Company } | null {
+  const userId = getSessionUserId();
+  if (!userId) return null;
+  const data = getData(userId);
+  if (!data) return null;
+  const quote = data.quotes.find((q) => q.shareToken === token);
+  if (!quote) return null;
+  return { quote, company: data.company };
+}
+
 /** Marca a visualização de um orçamento (usado por link público no futuro). */
 export function localTouchQuote(quoteId: string): void {
   const userId = getSessionUserId();

@@ -202,6 +202,7 @@ export function createSupabaseDB(client: SupabaseClient): DB {
       updatedAt: row.updated_at,
       viewedAt: row.viewed_at,
       approvedAt: row.approved_at,
+      shareToken: (row as QuotesRow & { share_token?: string }).share_token ?? undefined,
     };
   }
 

@@ -47,8 +47,11 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // API privada: exige sessão (webhooks ficam públicos)
-  const isPrivateApi = pathname.startsWith('/api') && !pathname.startsWith('/api/billing');
+  // API privada: exige sessão (webhooks e links públicos ficam abertos)
+  const isPrivateApi =
+    pathname.startsWith('/api') &&
+    !pathname.startsWith('/api/billing') &&
+    !pathname.startsWith('/api/public');
   if (isPrivateApi && !user) {
     return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
   }

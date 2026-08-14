@@ -38,6 +38,7 @@ export function buildQuote(input: QuoteInput, company: Company, number?: number)
     updatedAt: now,
     viewedAt: null,
     approvedAt: null,
+    shareToken: generateId(),
   };
 }
 

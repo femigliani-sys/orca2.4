@@ -29,6 +29,7 @@ export const PLANS: Plan[] = [
       metrics: false,
       multiUser: false,
       automations: false,
+      shareLinks: false,
     },
   },
   {
@@ -45,6 +46,7 @@ export const PLANS: Plan[] = [
       'Pipeline de vendas',
       'Follow-ups automáticos e lembretes',
       'Métricas e taxa de conversão',
+      'Link público do orçamento (cliente aprova online)',
       'Sem marca d\'água',
     ],
     limits: {
@@ -58,6 +60,7 @@ export const PLANS: Plan[] = [
       metrics: true,
       multiUser: false,
       automations: false,
+      shareLinks: true,
     },
   },
   {
@@ -71,6 +74,7 @@ export const PLANS: Plan[] = [
       'Permissões por membro',
       'Automações de follow-up',
       'Relatórios avançados',
+      'Link público do orçamento (cliente aprova online)',
       'Prioridade no suporte',
     ],
     limits: {
@@ -84,6 +88,7 @@ export const PLANS: Plan[] = [
       metrics: true,
       multiUser: true,
       automations: true,
+      shareLinks: true,
     },
   },
 ];

@@ -87,6 +87,7 @@ export interface QuotesRow {
   updated_at: string;
   viewed_at: string | null;
   approved_at: string | null;
+  share_token?: string | null;
 }
 
 export interface QuoteItemsRow {

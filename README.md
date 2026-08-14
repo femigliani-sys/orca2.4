@@ -34,6 +34,10 @@ preços cadastrados pela própria empresa**.
   - Webhook que **ativa o plano automaticamente** ao aprovar e registra o pagamento
   - **Histórico de pagamentos** e **cancelamento de assinatura** em um clique
   - **Modo simulado** (sem chave do MP): fluxo completo testável com aviso claro
+- **Link público do orçamento** (plano Pro+): o cliente abre `https://seu-site/o/[token]`,
+  vê o orçamento, baixa o PDF, e **aprova online** — o status muda para "Aprovado" e a
+  empresa recebe notificação. Ao abrir o link, o orçamento é marcado como "Visualizado".
+  Segurança: acesso via função `security definer` do Postgres (só lê o orçamento do token).
 - **Notificações** in-app (follow-ups pendentes, status, pagamento aprovado, limite do plano)
 
 ---

@@ -16,7 +16,12 @@ import {
   Plus,
   BellRing,
   User,
+  Link2,
+  Lock,
+  Check,
+  Eye,
 } from 'lucide-react';
+import { planHasFeature } from '@/lib/plans';
 import { useData } from '@/components/providers/data-provider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -52,6 +57,7 @@ export default function QuoteDetailPage() {
   const [newFollowUpDate, setNewFollowUpDate] = useState(suggestedFollowUpDate().slice(0, 10));
   const [creatingFollowUp, setCreatingFollowUp] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const quoteFollowUps = useMemo(
     () => followUps.filter((f) => f.quoteId === quoteId).sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor)),
@@ -88,6 +94,11 @@ export default function QuoteDetailPage() {
   const phone = currentQuote.customerPhone ?? '';
   const status = effectiveStatus(currentQuote);
   const waLink = phone ? buildWaLink(phone, buildQuoteMessage(currentQuote, company)) : '';
+  const shareEnabled = planHasFeature(company.plan, 'shareLinks');
+  const shareUrl =
+    typeof window !== 'undefined' && currentQuote.shareToken
+      ? `${window.location.origin}/o/${currentQuote.shareToken}`
+      : '';
 
   async function changeStatus(next: QuoteStatus) {
     if (next === status) return;
@@ -355,6 +366,88 @@ export default function QuoteDetailPage() {
               >
                 <Trash2 className="size-4" /> Excluir orçamento
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Link público (plano Pro+) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Link2 className="size-4 text-brand-600" /> Link público do orçamento
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {shareEnabled
+                  ? 'Compartilhe este link: o cliente vê o orçamento, baixa o PDF e aprova online.'
+                  : 'Recurso do plano Pro: seu cliente visualiza e aprova o orçamento pelo link.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {shareEnabled ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
+                    <p className="min-w-0 flex-1 truncate text-xs text-ink-500">{shareUrl || '…'}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-xs"
+                      onClick={async () => {
+                        if (!shareUrl) return;
+                        try {
+                          await navigator.clipboard.writeText(shareUrl);
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2000);
+                          toast.success('Link copiado! Envie para o cliente.');
+                        } catch {
+                          toast.error('Não foi possível copiar.');
+                        }
+                      }}
+                    >
+                      {copiedLink ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                      {copiedLink ? 'Copiado!' : 'Copiar link'}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1"
+                      disabled={!shareUrl}
+                      onClick={() => {
+                        if (shareUrl) window.open(shareUrl, '_blank', 'noopener');
+                      }}
+                    >
+                      <Eye className="size-4" /> Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="whatsapp"
+                      className="flex-1"
+                      disabled={!shareUrl || !phone}
+                      onClick={() => {
+                        if (!shareUrl || !phone) return;
+                        const msg = `Olá, ${currentQuote.customerName}! Veja seu orçamento ${quoteNumberLabel(currentQuote.number)} por aqui: ${shareUrl}`;
+                        const link = buildWaLink(phone, msg);
+                        if (link) window.open(link, '_blank', 'noopener');
+                      }}
+                    >
+                      <MessageCircle className="size-4" /> Enviar no WhatsApp
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-ink-400">
+                    Ao abrir o link, o orçamento é marcado como "Visualizado" automaticamente.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ink-200 bg-ink-50/50 px-4 py-5 text-center">
+                  <Lock className="size-5 text-ink-300" />
+                  <p className="text-xs text-ink-400">
+                    Disponível no plano <strong>Pro</strong> e <strong>Business</strong>.
+                  </p>
+                  <Link href="/app/planos">
+                    <Button size="sm" variant="outline">Fazer upgrade</Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
 

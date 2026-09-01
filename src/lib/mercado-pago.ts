@@ -5,15 +5,12 @@
  */
 import type { PlanId } from './types';
 import { getPlan, planPriceCents } from './plans';
+import { getSiteUrl } from './site-url';
 
 const API = 'https://api.mercadopago.com';
 
 export function isMercadoPagoConfigured(): boolean {
   return Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN);
-}
-
-function siteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 }
 
 export interface CheckoutPreference {
@@ -52,12 +49,12 @@ export async function createCheckoutPreference(input: {
       ],
       payer: input.email ? { email: input.email } : undefined,
       back_urls: {
-        success: `${siteUrl()}/app/planos?status=success`,
-        pending: `${siteUrl()}/app/planos?status=pending`,
-        failure: `${siteUrl()}/app/planos?status=failure`,
+        success: `${getSiteUrl()}/app/planos?status=success`,
+        pending: `${getSiteUrl()}/app/planos?status=pending`,
+        failure: `${getSiteUrl()}/app/planos?status=failure`,
       },
       auto_return: 'approved',
-      notification_url: `${siteUrl()}/api/billing/webhook`,
+      notification_url: `${getSiteUrl()}/api/billing/webhook`,
       external_reference: `${input.companyId}:${input.plan}`,
       metadata: { company_id: input.companyId, plan: input.plan, app: 'orcaai' },
       statement_descriptor: 'ORCAAI',
@@ -138,8 +135,8 @@ export async function createPreapproval(input: {
         transaction_amount: planPriceCents(plan),
         currency_id: 'BRL',
       },
-      back_url: `${siteUrl()}/app/planos?status=success`,
-      notification_url: `${siteUrl()}/api/billing/webhook`,
+      back_url: `${getSiteUrl()}/app/planos?status=success`,
+      notification_url: `${getSiteUrl()}/api/billing/webhook`,
       metadata: { company_id: input.companyId, plan: input.plan, app: 'orcaai' },
     }),
   });

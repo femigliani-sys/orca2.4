@@ -8,6 +8,7 @@
  *   WHATSAPP_PHONE_NUMBER_ID     → ID do número de telefone (Meta)
  *   WHATSAPP_WEBHOOK_VERIFY_TOKEN → token de verificação do webhook (qualquer string sua)
  */
+import { getSiteUrl } from './site-url';
 
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 
@@ -27,7 +28,7 @@ export function isWhatsAppWebhookConfigured(): boolean {
 
 /** URL do webhook para configurar no painel da Meta. */
 export function getWhatsAppWebhookUrl(): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  const base = getSiteUrl();
   return `${base}/api/whatsapp/webhook`;
 }
 

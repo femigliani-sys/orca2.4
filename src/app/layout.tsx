@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { GlobalErrorOverlay } from '@/components/dev/error-overlay';
+import { getSiteUrlObject } from '@/lib/site-url';
 import './globals.css';
 
 const inter = Inter({
@@ -11,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+  metadataBase: getSiteUrlObject(),
   title: {
     default: 'OrçaAI — Transforme pedidos de orçamento em vendas',
     template: '%s · OrçaAI',

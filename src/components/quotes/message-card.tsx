@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, MessageCircle, RefreshCw } from 'lucide-react';
+import { Copy, Check, MessageCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { buildQuoteMessage } from '@/lib/ai/templates';
 import type { Company, Quote } from '@/lib/types';
-import { buildWaLink } from '@/lib/whatsapp';
+import { buildWaLink, sendViaWhatsAppApi } from '@/lib/whatsapp';
 
 interface Props {
   quote: Pick<Quote, 'items' | 'total' | 'validityDays' | 'customerName'>;
@@ -15,9 +15,13 @@ interface Props {
   onSend?: (channel: 'whatsapp' | 'copiado') => void;
 }
 
-/** Mensagem pronta + ações (copiar / WhatsApp). */
+/**
+ * Mensagem pronta + ações (copiar / WhatsApp).
+ * - WhatsApp: tenta a API oficial (se configurada); senão abre wa.me.
+ */
 export function MessageCard({ quote, company, phone, onSend }: Props) {
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
   const message = buildQuoteMessage(quote, company);
 
   async function copy() {
@@ -32,18 +36,34 @@ export function MessageCard({ quote, company, phone, onSend }: Props) {
     }
   }
 
-  function sendWhatsApp() {
+  async function sendWhatsApp() {
     if (!phone) {
       toast.error('Adicione o telefone do cliente para enviar pelo WhatsApp.');
       return;
     }
-    const link = buildWaLink(phone, message);
-    if (!link) {
-      toast.error('Telefone inválido.');
-      return;
+    setSending(true);
+    try {
+      const outcome = await sendViaWhatsAppApi(phone, message);
+      if (outcome.method === 'api') {
+        onSend?.('whatsapp');
+        toast.success('Mensagem enviada pelo WhatsApp Business API ✓');
+        return;
+      }
+      // Fallback: link wa.me
+      const link = buildWaLink(phone, message);
+      if (!link) {
+        toast.error('Telefone inválido.');
+        return;
+      }
+      onSend?.('whatsapp');
+      window.open(link, '_blank', 'noopener');
+      if (outcome.error) {
+        // API configurada mas falhou (ex.: fora da janela de 24h) — avisa
+        toast.info('Enviado pelo link (a API não conseguiu: ' + outcome.error.slice(0, 80) + '…)');
+      }
+    } finally {
+      setSending(false);
     }
-    onSend?.('whatsapp');
-    return link;
   }
 
   const waLink = phone ? buildWaLink(phone, message) : '';
@@ -68,17 +88,10 @@ export function MessageCard({ quote, company, phone, onSend }: Props) {
           {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
           {copied ? 'Copiada!' : 'Copiar mensagem'}
         </Button>
-        {waLink ? (
-          <Button asChild variant="whatsapp" className="flex-1" onClick={() => onSend?.('whatsapp')}>
-            <a href={waLink} target="_blank" rel="noopener noreferrer">
-              <MessageCircle className="size-4" /> Enviar pelo WhatsApp
-            </a>
-          </Button>
-        ) : (
-          <Button variant="whatsapp" onClick={sendWhatsApp} className="flex-1">
-            <MessageCircle className="size-4" /> Enviar pelo WhatsApp
-          </Button>
-        )}
+        <Button variant="whatsapp" onClick={sendWhatsApp} loading={sending} className="flex-1">
+          {!sending && <MessageCircle className="size-4" />}
+          {sending ? 'Enviando…' : 'Enviar pelo WhatsApp'}
+        </Button>
       </div>
       {!phone && (
         <p className="text-xs text-amber-600">Adicione o telefone do cliente para habilitar o envio pelo WhatsApp.</p>

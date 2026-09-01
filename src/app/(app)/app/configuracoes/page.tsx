@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Building2, FileText, Palette, Upload, X } from 'lucide-react';
+import { Building2, FileText, Palette, Upload, X, MessageCircle, CheckCircle2, XCircle, Send } from 'lucide-react';
 import { useData } from '@/components/providers/data-provider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { db } from '@/lib/db';
 import { BUSINESS_TYPES, VALIDITY_OPTIONS } from '@/lib/constants';
 import { DEFAULT_SETTINGS, DEFAULT_QUOTE_MESSAGE } from '@/lib/defaults';
+import { buildWaLink } from '@/lib/whatsapp';
 import type { CompanySettings } from '@/lib/types';
 
 export default function SettingsPage() {
@@ -43,6 +44,18 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<CompanySettings>({ ...DEFAULT_SETTINGS });
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+
+  // WhatsApp Business API
+  const [waStatus, setWaStatus] = useState<{ configured: boolean; webhookConfigured: boolean; phoneNumberId: string | null; webhookUrl: string; demo: boolean; guide: string } | null>(null);
+  const [testPhone, setTestPhone] = useState('');
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/whatsapp/status')
+      .then((r) => r.json())
+      .then((j) => setWaStatus(j))
+      .catch(() => setWaStatus(null));
+  }, []);
 
   useEffect(() => {
     if (!company) return;
@@ -162,6 +175,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="empresa"><Building2 className="mr-1.5 size-4" /> Empresa</TabsTrigger>
           <TabsTrigger value="orcamentos"><FileText className="mr-1.5 size-4" /> Orçamentos</TabsTrigger>
+          <TabsTrigger value="whatsapp"><MessageCircle className="mr-1.5 size-4" /> WhatsApp</TabsTrigger>
           <TabsTrigger value="aparencia"><Palette className="mr-1.5 size-4" /> Aparência</TabsTrigger>
         </TabsList>
 
@@ -264,6 +278,136 @@ export default function SettingsPage() {
               <div className="flex justify-end">
                 <Button onClick={saveOrcamentos} loading={saving === 'orcamentos'}>Salvar padrões</Button>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* -------------------------------------------------- WhatsApp */}
+        <TabsContent value="whatsapp">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="size-4 text-emerald-600" /> WhatsApp Business API
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Envie orçamentos direto pela API oficial da Meta (sem depender do link wa.me).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {waStatus === null ? (
+                <p className="text-sm text-ink-400">Verificando configuração…</p>
+              ) : (
+                <>
+                  {/* Status */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className={`flex items-start gap-3 rounded-xl border p-4 ${waStatus.configured ? 'border-emerald-200 bg-emerald-50' : 'border-ink-200 bg-ink-50/60'}`}>
+                      {waStatus.configured ? (
+                        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+                      ) : (
+                        <XCircle className="mt-0.5 size-5 shrink-0 text-ink-400" />
+                      )}
+                      <div>
+                        <p className="text-sm font-semibold text-ink-900">
+                          {waStatus.configured ? 'API configurada ✓' : 'API não configurada'}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-500">
+                          {waStatus.configured
+                            ? `Número ativo: ${waStatus.phoneNumberId}`
+                            : waStatus.demo
+                              ? 'Você está no modo demonstração — as mensagens usam o link wa.me.'
+                              : 'As mensagens usam o link wa.me enquanto a API não estiver configurada.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`flex items-start gap-3 rounded-xl border p-4 ${waStatus.webhookConfigured ? 'border-emerald-200 bg-emerald-50' : 'border-ink-200 bg-ink-50/60'}`}>
+                      {waStatus.webhookConfigured ? (
+                        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+                      ) : (
+                        <XCircle className="mt-0.5 size-5 shrink-0 text-ink-400" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink-900">
+                          {waStatus.webhookConfigured ? 'Webhook configurado ✓' : 'Webhook pendente'}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-500">
+                          {waStatus.webhookUrl && (
+                            <>
+                              URL para o painel da Meta:
+                              <code className="mt-1 block break-all rounded bg-white px-1.5 py-0.5 text-[11px] text-ink-600">
+                                {waStatus.webhookUrl}
+                              </code>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Guia */}
+                  <div className="rounded-xl border border-ink-100 bg-ink-50/50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Como configurar</p>
+                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-600">
+                      <li>Crie um app em <strong>Meta for Developers</strong> e conecte seu WhatsApp Business.</li>
+                      <li>Copie o <strong>Token de Acesso</strong> e o <strong>ID do Número</strong>.</li>
+                      <li>Adicione as variáveis <code className="rounded bg-white px-1">WHATSAPP_ACCESS_TOKEN</code> e <code className="rounded bg-white px-1">WHATSAPP_PHONE_NUMBER_ID</code> no ambiente (Vercel → Settings → Environment Variables) e faça redeploy.</li>
+                      <li>No painel da Meta, configure o webhook com a URL acima e o <code className="rounded bg-white px-1">WHATSAPP_WEBHOOK_VERIFY_TOKEN</code> de sua escolha.</li>
+                    </ol>
+                  </div>
+
+                  {/* Teste */}
+                  <div className="rounded-xl border border-ink-100 p-4">
+                    <p className="text-sm font-semibold text-ink-900">Enviar mensagem de teste</p>
+                    <p className="mt-1 text-xs text-ink-500">
+                      Envia "Olá! Este é um teste do OrçaAI ✓" para o número abaixo.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        placeholder="(11) 99999-9999"
+                        value={testPhone}
+                        onChange={(e) => setTestPhone(e.target.value)}
+                        className="sm:max-w-xs"
+                        inputMode="tel"
+                      />
+                      <Button
+                        variant="whatsapp"
+                        onClick={async () => {
+                          if (!testPhone.trim()) {
+                            toast.error('Informe o número para o teste.');
+                            return;
+                          }
+                          setTesting(true);
+                          try {
+                            const res = await fetch('/api/whatsapp/send', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                to: testPhone,
+                                body: 'Olá! Este é um teste do OrçaAI ✓',
+                              }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                            if (!res.ok || !json.ok) {
+                              toast.info(json.error || 'API não configurada — enviando pelo link wa.me.');
+                              const link = buildWaLink(testPhone, 'Olá! Este é um teste do OrçaAI ✓');
+                              if (link) window.open(link, '_blank', 'noopener');
+                            } else {
+                              toast.success('Mensagem enviada pelo WhatsApp Business API ✓');
+                            }
+                          } catch {
+                            toast.error('Falha ao enviar.');
+                          } finally {
+                            setTesting(false);
+                          }
+                        }}
+                        loading={testing}
+                      >
+                        {!testing && <Send className="size-4" />}
+                        {testing ? 'Enviando…' : 'Enviar teste'}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

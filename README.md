@@ -19,7 +19,9 @@ preços cadastrados pela própria empresa**.
   7/30/90 dias e atividade recente
 - **Gerador de orçamento** com múltiplos serviços, desconto, validade e observações
 - **IA "Gerar com IA"**: cola a mensagem do cliente → identifica serviços, quantidades e preços
-  do catálogo → **nunca inventa preços** (pede confirmação quando não tem certeza)
+  do catálogo → **nunca inventa preços** (pede confirmação quando não tem certeza).
+  A IA local entende números por extenso ("vinte metros quadrados"), quantidades com "2x",
+  erros de digitação, "12 mil BTUs" (seleciona o modelo exato) e calcula o total estimado.
 - **Mensagem pronta** para WhatsApp com botões *Copiar* e *Enviar pelo WhatsApp* (link `wa.me`)
 - **PDF profissional** com logo, termos, assinatura e dados da empresa
 - **Clientes** com busca, filtros e perfil com histórico completo
@@ -34,6 +36,9 @@ preços cadastrados pela própria empresa**.
   - Webhook que **ativa o plano automaticamente** ao aprovar e registra o pagamento
   - **Histórico de pagamentos** e **cancelamento de assinatura** em um clique
   - **Modo simulado** (sem chave do MP): fluxo completo testável com aviso claro
+- **WhatsApp Business API** (Meta Cloud API): envio direto pela API oficial quando configurada,
+  com fallback automático para o link `wa.me`. Inclui webhook de verificação/recepção e aba de
+  configuração com teste de envio.
 - **Link público do orçamento** (plano Pro+): o cliente abre `https://seu-site/o/[token]`,
   vê o orçamento, baixa o PDF, e **aprova online** — o status muda para "Aprovado" e a
   empresa recebe notificação. Ao abrir o link, o orçamento é marcado como "Visualizado".
@@ -101,7 +106,15 @@ NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY=
 > cria uma **assinatura recorrente** (preapproval) — cobrança mensal automática — com fallback para
 > pagamento único (Checkout Pro). Configure o webhook do MP para
 > `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** (com aviso).
-> Migrações necessárias: `0001`, `0002`, `0003`, `0004`.
+> Migrações necessárias: `0001`, `0002`, `0003`, `0004`, `0005`.
+
+## WhatsApp Business API (opcional)
+
+Com `WHATSAPP_ACCESS_TOKEN` e `WHATSAPP_PHONE_NUMBER_ID` configurados no servidor, o botão
+"Enviar pelo WhatsApp" passa a usar a **API oficial da Meta** (sem depender do link wa.me).
+Configure o webhook no painel da Meta com a URL `https://SEU-DOMINIO/api/whatsapp/webhook`
+e o `WHATSAPP_WEBHOOK_VERIFY_TOKEN`. Sem a configuração, o app usa o link `wa.me` (fallback).
+Guia completo em [developers.facebook.com/docs/whatsapp/cloud-api](https://developers.facebook.com/docs/whatsapp/cloud-api).
 
 > Sem `OPENAI_API_KEY` o app usa o interpretador local — o produto continua 100% funcional.
 

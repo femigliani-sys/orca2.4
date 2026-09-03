@@ -260,11 +260,17 @@ export const localDB: DB = {
   },
 
   async exchangeCodeForSession() {
-    // Sem Supabase não há código a trocar
+    // Sem Supabase não há código a trocar — segue direto para a nova senha
   },
 
-  async updatePassword() {
-    throw new Error('Recuperação de senha disponível no modo produção (Supabase). No modo demonstração, use uma conta existente.');
+  async updatePassword(newPassword) {
+    // Modo demonstração: realmente altera a senha do usuário local
+    const { userId } = requireData();
+    const users = readJSON<StoredUser[]>(K_USERS, []);
+    const idx = users.findIndex((u) => u.id === userId);
+    if (idx === -1) throw new Error('Usuário não encontrado.');
+    users[idx].passwordHash = await demoHash(newPassword);
+    writeJSON(K_USERS, users);
   },
 
   async resendConfirmation(email) {

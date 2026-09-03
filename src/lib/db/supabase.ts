@@ -289,13 +289,15 @@ export function createSupabaseDB(client: SupabaseClient): DB {
   return {
     // ========================================================== Auth
     async signUp({ name, companyName, email, password, businessType }) {
+      // Link de confirmação aponta para a ORIGEM ATUAL (onde o cadastro foi
+      // feito) para que o code_verifier esteja disponível ao confirmar.
+      const origin = typeof window !== 'undefined' ? window.location.origin : getSiteUrl();
       const { data, error } = await client.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: {
           data: { name: name.trim(), company_name: companyName.trim(), business_type: businessType },
-          // Link de confirmação do e-mail cai na nossa página de confirmação
-          emailRedirectTo: `${getSiteUrl()}/auth/confirmar-email`,
+          emailRedirectTo: `${origin.replace(/\/+$/, '')}/auth/confirmar-email`,
         },
       });
       if (error) throw error;
@@ -335,31 +337,69 @@ export function createSupabaseDB(client: SupabaseClient): DB {
     },
 
     async resetPassword(email) {
-      const { error } = await client.auth.resetPasswordForEmail(email, {
-        // Link de recuperação cai na MESMA página /auth/recuperar-senha,
-        // que agora detecta o código (?code=) e mostra o formulário de nova senha.
-        redirectTo: `${getSiteUrl()}/auth/recuperar-senha`,
+      // Delega para a API route: o code_verifier fica em COOKIE (via servidor),
+      // então o clique no link do e-mail consegue trocar o código por sessão.
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, origin }),
       });
-      if (error) throw error;
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'Não foi possível enviar o e-mail de recuperação.');
+      }
     },
 
     async exchangeCodeForSession(code) {
+      // 1º tenta no SERVIDOR (verifier em cookie, fluxo iniciado via server).
+      const res = await fetch('/api/auth/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && json.ok) return;
+
+      // 2º fallback: troca no CLIENTE — cobre fluxos iniciados no navegador
+      // (verifier guardado no storage do cliente) ou quando os cookies não
+      // compartilham a mesma origem.
       const { error } = await client.auth.exchangeCodeForSession(code);
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          'Não foi possível validar o link. Solicite um novo e abra-o no MESMO navegador em que fez o pedido. Se o problema persistir, verifique se o domínio configurado (Site URL) é o mesmo de onde você acessa o app.',
+        );
+      }
     },
 
     async updatePassword(newPassword) {
+      // 1º servidor (usa a sessão do cookie). Se falhar, tenta no cliente.
+      try {
+        const res = await fetch('/api/auth/update-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: newPassword }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (res.ok && json.ok) return;
+      } catch {
+        // segue para o fallback no cliente
+      }
       const { error } = await client.auth.updateUser({ password: newPassword });
       if (error) throw error;
     },
 
     async resendConfirmation(email) {
-      const { error } = await client.auth.resend({
-        type: 'signup',
-        email,
-        options: { emailRedirectTo: `${getSiteUrl()}/auth/confirmar-email` },
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const res = await fetch('/api/auth/resend-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, origin }),
       });
-      if (error) throw error;
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'Não foi possível reenviar o e-mail.');
+      }
     },
 
     async getSession() {

@@ -47,12 +47,13 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // API privada: exige sessão (webhooks e links públicos ficam abertos)
+  // API privada: exige sessão (webhooks, links públicos e rotas de auth ficam abertos)
   const isPrivateApi =
     pathname.startsWith('/api') &&
     !pathname.startsWith('/api/billing') &&
     !pathname.startsWith('/api/public') &&
-    !pathname.startsWith('/api/whatsapp/webhook');
+    !pathname.startsWith('/api/whatsapp/webhook') &&
+    !pathname.startsWith('/api/auth');
   if (isPrivateApi && !user) {
     return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
   }

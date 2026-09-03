@@ -17,6 +17,9 @@ preços cadastrados pela própria empresa**.
   recuperação cai numa página que troca o código por sessão e exibe "definir nova senha"; o
   link de confirmação de e-mail cai numa página dedicada (com reenvio e aviso de rate limit);
   login avisa quando a senha foi alterada. Proteção de rotas privadas.
+  A troca de código e a nova senha acontecem **no servidor via cookies** (@supabase/ssr) com
+  fallback no cliente — evita o erro "PKCE code verifier not found" e os links apontam para a
+  origem atual (Site URL em Supabase deve ser o domínio real).
 - **Onboarding** em 3 passos (empresa → tipo de negócio → primeiros serviços)
 - **Dashboard** com KPIs (enviados, pendentes, aprovados, valor vendido, conversão), gráfico
   7/30/90 dias e atividade recente

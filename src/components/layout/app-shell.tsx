@@ -18,6 +18,7 @@ import {
   LogOut,
   Sparkles,
   ChevronRight,
+  LifeBuoy,
 } from 'lucide-react';
 import { useData } from '@/components/providers/data-provider';
 import { Logo } from '@/components/ui/logo';
@@ -47,6 +48,7 @@ const NAV_ITEMS = [
   { href: '/app/pipeline', label: 'Pipeline', icon: KanbanSquare },
   { href: '/app/follow-ups', label: 'Follow-ups', icon: BellRing, badge: true },
   { href: '/app/servicos', label: 'Meus serviços', icon: Wrench },
+  { href: '/app/suporte', label: 'Suporte', icon: LifeBuoy },
   { href: '/app/configuracoes', label: 'Configurações', icon: Settings },
   { href: '/app/planos', label: 'Planos', icon: Gem },
 ];

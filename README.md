@@ -36,6 +36,9 @@ preços cadastrados pela própria empresa**.
   - Webhook que **ativa o plano automaticamente** ao aprovar e registra o pagamento
   - **Histórico de pagamentos** e **cancelamento de assinatura** em um clique
   - **Modo simulado** (sem chave do MP): fluxo completo testável com aviso claro
+- **Suporte**: aba dedicada no painel com central de ajuda (guias rápidos para cada recurso),
+  FAQ de resolução de problemas e contato por e-mail/WhatsApp — canais configuráveis via env
+  (`NEXT_PUBLIC_SUPPORT_EMAIL`, `NEXT_PUBLIC_SUPPORT_WHATSAPP`, `NEXT_PUBLIC_SUPPORT_URL`).
 - **WhatsApp Business API** (Meta Cloud API): envio direto pela API oficial quando configurada,
   com fallback automático para o link `wa.me`. Inclui webhook de verificação/recepção e aba de
   configuração com teste de envio.

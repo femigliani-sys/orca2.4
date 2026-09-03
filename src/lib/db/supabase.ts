@@ -21,6 +21,7 @@ import type {
 import { DEFAULT_SETTINGS } from '../defaults';
 import { buildQuote, computeTotals, suggestedFollowUpDate } from '../quote-utils';
 import { monthStart, sideEffectsFor } from '../side-effects';
+import { getSiteUrl } from '../site-url';
 import type { DB } from './types';
 import type {
   CompaniesRow,
@@ -293,6 +294,8 @@ export function createSupabaseDB(client: SupabaseClient): DB {
         password,
         options: {
           data: { name: name.trim(), company_name: companyName.trim(), business_type: businessType },
+          // Link de confirmação do e-mail cai na nossa página de confirmação
+          emailRedirectTo: `${getSiteUrl()}/auth/confirmar-email`,
         },
       });
       if (error) throw error;
@@ -333,7 +336,28 @@ export function createSupabaseDB(client: SupabaseClient): DB {
 
     async resetPassword(email) {
       const { error } = await client.auth.resetPasswordForEmail(email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/auth/recuperar-senha`,
+        // Link de recuperação cai na MESMA página /auth/recuperar-senha,
+        // que agora detecta o código (?code=) e mostra o formulário de nova senha.
+        redirectTo: `${getSiteUrl()}/auth/recuperar-senha`,
+      });
+      if (error) throw error;
+    },
+
+    async exchangeCodeForSession(code) {
+      const { error } = await client.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+    },
+
+    async updatePassword(newPassword) {
+      const { error } = await client.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+    },
+
+    async resendConfirmation(email) {
+      const { error } = await client.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: `${getSiteUrl()}/auth/confirmar-email` },
       });
       if (error) throw error;
     },

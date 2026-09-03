@@ -65,8 +65,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Já logado não vê páginas de auth
-  if (pathname.startsWith('/auth') && user) {
+  // Já logado não vê páginas de auth — EXCETO os callbacks de recuperação/
+  // confirmação, que precisam continuar acessíveis após a troca do código
+  // por sessão (senão o usuário perde o formulário ao recarregar).
+  const isAuthCallback =
+    pathname === '/auth/recuperar-senha' || pathname === '/auth/confirmar-email';
+  if (pathname.startsWith('/auth') && !isAuthCallback && user) {
     const url = request.nextUrl.clone();
     url.pathname = '/app';
     return NextResponse.redirect(url);

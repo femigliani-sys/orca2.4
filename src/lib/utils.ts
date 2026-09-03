@@ -127,14 +127,20 @@ export function friendlyError(error: unknown): string {
   if (typeof error === 'string') return error;
   if (error instanceof Error) {
     const msg = error.message;
+    // Supabase expõe códigos (ex.: over_email_send_rate_limit) além da mensagem
+    const code = (error as unknown as { code?: string }).code ?? '';
     const map: Record<string, string> = {
       'Invalid login credentials': 'E-mail ou senha incorretos.',
       'Email not confirmed': 'Confirme seu e-mail antes de entrar.',
       'User already registered': 'Este e-mail já está cadastrado.',
       'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
-      'Rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos e tente de novo.',
+      'Rate limit exceeded': 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo.',
+      over_email_send_rate_limit: 'Você enviou e-mails demais em pouco tempo. Aguarde alguns minutos e tente de novo.',
+      over_request_rate_limit: 'Muitas solicitações em pouco tempo. Aguarde um instante e tente de novo.',
+      email_exists: 'Este e-mail já está cadastrado.',
+      validation_failed: 'Verifique os dados informados.',
     };
-    return map[msg] ?? msg;
+    return map[code] ?? map[msg] ?? msg;
   }
   return 'Algo deu errado. Tente novamente.';
 }

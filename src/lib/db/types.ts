@@ -31,6 +31,15 @@ export interface DB {
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   resetPassword(email: string): Promise<void>;
+  /**
+   * Troca o código da URL (link de recuperação/confirmação, fluxo PKCE)
+   * por uma sessão válida. Só faz efeito no modo Supabase.
+   */
+  exchangeCodeForSession(code: string): Promise<void>;
+  /** Define a nova senha da sessão atual (após recuperação confirmada). */
+  updatePassword(newPassword: string): Promise<void>;
+  /** Reenvia o e-mail de confirmação de cadastro (Supabase aplica rate limit). */
+  resendConfirmation(email: string): Promise<void>;
   getSession(): Promise<{ userId: string | null }>;
   getCurrentUser(): Promise<User | null>;
   onSessionChange(cb: () => void): () => void;

@@ -11,16 +11,26 @@ import { Label } from '@/components/ui/label';
 import { db } from '@/lib/db';
 import { friendlyError } from '@/lib/utils';
 
+type Info =
+  | { text: string; tone: 'green' | 'blue'; link?: { href: string; label: string } }
+  | null;
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [info, setInfo] = useState(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('confirmado') ? (
-      'Conta criada! Confirme seu e-mail antes de entrar.'
-    ) : null,
-  );
+  const [info, setInfo] = useState<Info>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('senha')) {
+      return { text: 'Senha alterada com sucesso! Entre com sua nova senha.', tone: 'green' };
+    }
+    if (params.get('confirmado')) {
+      return { text: 'Conta criada! Confirme seu e-mail antes de entrar.', tone: 'blue' };
+    }
+    return null;
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +47,19 @@ export default function LoginPage() {
       router.replace(next && next.startsWith('/') && !next.startsWith('/auth') ? next : '/app');
       router.refresh();
     } catch (err) {
-      toast.error(friendlyError(err));
+      const msg = friendlyError(err);
+      toast.error(msg);
+      // Se o e-mail não foi confirmado, oferece a tela de confirmação
+      if (msg.toLowerCase().includes('confirme seu e-mail') || msg.toLowerCase().includes('not confirmed')) {
+        setInfo({
+          text: 'Seu e-mail ainda não foi confirmado.',
+          tone: 'blue',
+          link: {
+            href: `/auth/confirmar-email?email=${encodeURIComponent(email.trim().toLowerCase())}`,
+            label: 'Reenviar e-mail de confirmação →',
+          },
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -58,7 +80,20 @@ export default function LoginPage() {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {info && (
-          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{info}</div>
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm ${
+              info.tone === 'green'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-sky-200 bg-sky-50 text-sky-800'
+            }`}
+          >
+            {info.text}
+            {info.link && (
+              <Link href={info.link.href} className="mt-1 block font-semibold text-sky-900 underline">
+                {info.link.label}
+              </Link>
+            )}
+          </div>
         )}
         <div className="space-y-1.5">
           <Label htmlFor="email">E-mail</Label>

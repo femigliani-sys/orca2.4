@@ -51,11 +51,14 @@ export default function SignupPage() {
         password: form.password,
         businessType: form.businessType,
       });
-      // Se o Supabase exigir confirmação de e-mail, não há sessão ainda
+      // Se o Supabase exigir confirmação de e-mail, não há sessão ainda →
+      // leva para a página "verifique seu e-mail" (com opção de reenviar)
       const session = await db.getSession();
       if (!session.userId) {
-        toast.success('Conta criada! 📩 Confirme seu e-mail e depois faça login.');
-        router.replace('/auth/login?confirmado=1');
+        toast.success('Conta criada! Confirme seu e-mail para ativar.');
+        router.replace(
+          `/auth/confirmar-email?email=${encodeURIComponent(form.email.trim().toLowerCase())}`,
+        );
       } else {
         toast.success('Conta criada! Vamos configurar seu negócio. 🚀');
         router.replace('/onboarding');

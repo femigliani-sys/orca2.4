@@ -13,7 +13,10 @@ preços cadastrados pela própria empresa**.
 ## ✨ Funcionalidades (MVP)
 
 - **Landing page** de alta conversão com demo interativa da IA
-- **Cadastro / login / recuperação de senha** com proteção de rotas privadas
+- **Cadastro / login / recuperação de senha / confirmação de e-mail** completos: o link de
+  recuperação cai numa página que troca o código por sessão e exibe "definir nova senha"; o
+  link de confirmação de e-mail cai numa página dedicada (com reenvio e aviso de rate limit);
+  login avisa quando a senha foi alterada. Proteção de rotas privadas.
 - **Onboarding** em 3 passos (empresa → tipo de negócio → primeiros serviços)
 - **Dashboard** com KPIs (enviados, pendentes, aprovados, valor vendido, conversão), gráfico
   7/30/90 dias e atividade recente

@@ -259,6 +259,19 @@ export const localDB: DB = {
     void user;
   },
 
+  async exchangeCodeForSession() {
+    // Sem Supabase não há código a trocar
+  },
+
+  async updatePassword() {
+    throw new Error('Recuperação de senha disponível no modo produção (Supabase). No modo demonstração, use uma conta existente.');
+  },
+
+  async resendConfirmation(email) {
+    void email;
+    throw new Error('O envio de e-mails só funciona no modo produção (Supabase).');
+  },
+
   async getSession() {
     return { userId: getSessionUserId() };
   },

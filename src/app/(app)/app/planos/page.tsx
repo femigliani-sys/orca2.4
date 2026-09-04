@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Check, Gem, CreditCard, Lock, ArrowRight, Loader2, CheckCircle2, XCircle, Receipt } from 'lucide-react';
+import { Check, Gem, CreditCard, Lock, ArrowRight, Loader2, CheckCircle2, XCircle, Receipt, RefreshCw } from 'lucide-react';
 import { useData } from '@/components/providers/data-provider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,7 @@ function PlansPageContent() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [statusBanner, setStatusBanner] = useState<'success' | 'pending' | 'failure' | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const loadBilling = useCallback(async () => {
     try {
@@ -53,19 +54,83 @@ function PlansPageContent() {
     }
   }, []);
 
+  /**
+   * Consulta o estado real no servidor (que confirma no MP e ativa se
+   * aprovado) e atualiza company+assinatura+histórico sem recarregar a página.
+   */
+  const syncStatus = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const res = await fetch('/api/billing/status', { method: 'POST' });
+      const json = (await res.json().catch(() => ({}))) as {
+        companyPlan?: string;
+        subscription?: { plan: string; status: string; renewsAt: string | null } | null;
+        pendingCount?: number;
+        demo?: boolean;
+      };
+      if (json.demo) return; // modo demonstração não tem servidor
+      await Promise.all([refresh(), loadBilling()]);
+      // Se ativou, limpa o banner de pendente
+      if (json.subscription?.status === 'ativo') {
+        setStatusBanner((prev) => (prev === 'pending' ? 'success' : prev));
+      }
+    } catch {
+      // mantém o estado atual; próximo tick tenta de novo
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     loadBilling();
   }, [loadBilling]);
+
+  // Sincroniza automaticamente enquanto houver pendência RECENTE (cobre o
+  // webhook que chega depois do usuário voltar e o retorno antes do webhook).
+  // Para após ~40 tentativas (~3 min) para não sobrecarregar em checkouts
+  // abandonados — o usuário ainda tem o botão "Verificar pagamento".
+  const hasRecentPending =
+    subscription?.status === 'pendente' ||
+    payments.some((p) => p.status === 'pendente' && Date.now() - new Date(p.createdAt).getTime() < 30 * 60 * 1000);
+  useEffect(() => {
+    if (!hasRecentPending) return;
+    let stop = false;
+    let attempts = 0;
+    const tick = async () => {
+      if (stop) return;
+      attempts += 1;
+      setSyncing(true);
+      await syncStatus();
+      if (!stop) setSyncing(false);
+      if (attempts >= 40) {
+        stop = true;
+        window.clearInterval(iv);
+      }
+    };
+    tick();
+    const iv = window.setInterval(tick, 5000);
+    const onFocus = () => { if (attempts < 40) void tick(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && attempts < 40) void tick();
+    });
+    return () => {
+      stop = true;
+      window.clearInterval(iv);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [hasRecentPending, syncStatus]);
 
   useEffect(() => {
     const status = searchParams.get('status');
     if (status === 'success' || status === 'pending' || status === 'failure') {
       setStatusBanner(status);
-      if (status === 'success') {
-        // Finalização automática: ativa o plano na volta do checkout (além do webhook)
+      // Finalização automática na volta do checkout. O finalize NÃO confia no
+      // redirect: confirma o status real no MP (paymentId ou busca por
+      // external_reference). Em seguida o polling acima garante a convergência.
+      if (status !== 'failure') {
         const sp = new URLSearchParams(searchParams.toString());
         const body = {
-          status: sp.get('collection_status') ?? 'approved',
+          status: sp.get('collection_status') ?? (status === 'success' ? 'approved' : 'pending'),
           externalReference: sp.get('external_reference') ?? '',
           paymentId: sp.get('collection_id') ?? sp.get('payment_id') ?? '',
           preferenceId: sp.get('preference_id') ?? '',
@@ -75,13 +140,27 @@ function PlansPageContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
-          .then(() => refresh())
-          .catch(() => refresh())
-          .finally(() => loadBilling());
+          .then((r) => r.json().catch(() => ({})))
+          .then((j: { activated?: boolean }) => {
+            if (j.activated) {
+              setStatusBanner('success');
+            } else if (status === 'pending' || status === 'success') {
+              // ainda não confirmado no MP → polling resolve quando chegar
+              setStatusBanner('pending');
+            }
+          })
+          .catch(() => {
+            if (status === 'pending') setStatusBanner('pending');
+          })
+          .finally(() => {
+            refresh();
+            loadBilling();
+          });
       } else {
         refresh();
         loadBilling();
       }
+      // Limpa os parâmetros da URL mantendo o banner local
       router.replace('/app/planos');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,18 +255,28 @@ function PlansPageContent() {
                 )}
               </p>
               {sub?.status === 'pendente' && (
-                <Badge variant="warning" className="mt-1">Pagamento pendente de confirmação</Badge>
+                <Badge variant="warning" className="mt-1 inline-flex items-center gap-1">
+                  {syncing ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                  Confirmando pagamento…
+                </Badge>
               )}
               {sub?.status === 'cancelado' && currentCompany.plan === 'free' && (
                 <Badge variant="secondary" className="mt-1">Assinatura cancelada</Badge>
               )}
             </div>
           </div>
-          {currentCompany.plan !== 'free' && (
-            <Button variant="secondary" onClick={() => setConfirmCancel(true)} className="shrink-0">
-              Cancelar assinatura
-            </Button>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {(sub?.status === 'pendente' || payments.some((p) => p.status === 'pendente')) && (
+              <Button variant="outline" size="sm" loading={syncing} onClick={() => void syncStatus()}>
+                <RefreshCw className="size-3.5" /> Verificar pagamento
+              </Button>
+            )}
+            {currentCompany.plan !== 'free' && (
+              <Button variant="secondary" onClick={() => setConfirmCancel(true)} className="shrink-0">
+                Cancelar assinatura
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 

@@ -120,7 +120,12 @@ NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY=
 > na tela do Mercado Pago). Obs.: não usamos preapproval/recorrência do MP porque ele só aceita
 > cartão (sem Pix). Configure o webhook do MP para
 > `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** (com aviso).
-> Migrações necessárias: `0001` a `0008`. IMPORTANTE: o Mercado Pago Checkout Pro usa
+> Migrações necessárias: `0001` a `0009`. A 0009 corrige o status que
+> "ficava Pendente": agora `finalize_plan_payment` MARCA os registros pendentes
+> da tabela `payments` como aprovados (antes inseria nova linha e o pendente
+> original ficava eterno) e garante EXECUTE para anon/authenticated (o webhook
+> roda sem sessão). O frontend da página Planos faz POLLING em `/api/billing/status`
+> (que confirma o status real no Mercado Pago) — o status atualiza sozinho. IMPORTANTE: o Mercado Pago Checkout Pro usa
 > valores em **REAIS** (não centavos) em `unit_price`/`transaction_amount`/`marketplace_fee` —
 > não multiplique por 100. A ativação pós-pagamento é feita pelo webhook E pela finalização
 > automática no retorno (`/api/billing/finalize` + migração 0007).

@@ -63,19 +63,7 @@ export async function POST(req: Request) {
   }
 
   const now = new Date().toISOString();
-  const paymentId = crypto.randomUUID();
-
-  // Registra o pagamento como pendente (usado para o histórico)
-  await supabase.from('payments').insert({
-    id: paymentId,
-    company_id: company.id,
-    plan,
-    amount: planDef.price,
-    status: 'pendente',
-    provider: isMercadoPagoConfigured() ? 'mercado_pago' : 'simulado',
-    provider_id: isMercadoPagoConfigured() ? paymentId : paymentId,
-    created_at: now,
-  });
+  const paymentId = crypto.randomUUID(); // id interno do registro no Supabase
 
   // ============================================================ Modo real
   if (isMercadoPagoConfigured()) {
@@ -90,10 +78,28 @@ export async function POST(req: Request) {
         email: user.email ?? undefined,
       });
 
-      await upsertSubscription(supabase, company.id, plan, 'pendente', 'mercado_pago', paymentId);
+      // Registra o pagamento pendente usando o id REAL da preferência do MP
+      // como provider_id → correlação exata com o retorno/back_url/webhook.
+      await supabase.from('payments').insert({
+        id: paymentId,
+        company_id: company.id,
+        plan,
+        amount: planDef.price,
+        status: 'pendente',
+        provider: 'mercado_pago',
+        provider_id: preference.id,
+        created_at: now,
+      });
+
+      await upsertSubscription(supabase, company.id, plan, 'pendente', 'mercado_pago', preference.id);
 
       return NextResponse.json({ initPoint: preference.initPoint, simulated: false });
     } catch (err) {
+      // limpa o registro interno caso a preferência falhe
+      await supabase.from('payments').delete().eq('id', paymentId).then(
+        () => {},
+        () => {},
+      );
       return NextResponse.json(
         { error: err instanceof Error ? err.message : 'Não foi possível iniciar o pagamento.' },
         { status: 500 },
@@ -102,6 +108,16 @@ export async function POST(req: Request) {
   }
 
   // ============================================================ Modo simulado
+  await supabase.from('payments').insert({
+    id: paymentId,
+    company_id: company.id,
+    plan,
+    amount: planDef.price,
+    status: 'pendente',
+    provider: 'simulado',
+    provider_id: paymentId,
+    created_at: now,
+  });
   await upsertSubscription(supabase, company.id, plan, 'pendente', 'simulado', paymentId);
 
   return NextResponse.json({

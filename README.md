@@ -119,7 +119,10 @@ NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY=
 > cria uma **assinatura recorrente** (preapproval) — cobrança mensal automática — com fallback para
 > pagamento único (Checkout Pro). Configure o webhook do MP para
 > `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** (com aviso).
-> Migrações necessárias: `0001`, `0002`, `0003`, `0004`, `0005`.
+> Migrações necessárias: `0001` a `0007`. IMPORTANTE: o Mercado Pago Checkout Pro usa
+> valores em **REAIS** (não centavos) em `unit_price`/`transaction_amount`/`marketplace_fee` —
+> não multiplique por 100. A ativação pós-pagamento é feita pelo webhook E pela finalização
+> automática no retorno (`/api/billing/finalize` + migração 0007).
 
 ## WhatsApp Business API (opcional)
 

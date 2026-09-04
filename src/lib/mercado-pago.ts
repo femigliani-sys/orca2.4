@@ -4,7 +4,7 @@
  * No modo demonstração (sem chave) o checkout é simulado na interface.
  */
 import type { PlanId } from './types';
-import { getPlan, planPriceCents } from './plans';
+import { getPlan } from './plans';
 import { getSiteUrl } from './site-url';
 
 const API = 'https://api.mercadopago.com';
@@ -43,7 +43,7 @@ export async function createCheckoutPreference(input: {
         {
           title: `OrçaAI — Plano ${plan.name} (assinatura mensal)`,
           quantity: 1,
-          unit_price: planPriceCents(plan),
+          unit_price: plan.price, // Checkout Pro usa REAIS (não centavos)
           currency_id: 'BRL',
         },
       ],
@@ -134,7 +134,7 @@ export async function createPreapproval(input: {
       auto_recurring: {
         frequency: 1,
         frequency_type: 'months',
-        transaction_amount: planPriceCents(plan),
+        transaction_amount: plan.price, // REAIS (não centavos)
         currency_id: 'BRL',
       },
       back_url: `${getSiteUrl()}/app/planos?status=success`,
@@ -178,7 +178,7 @@ export async function getPreapproval(preapprovalId: string): Promise<Preapproval
 
 // ---------------------------------------------------------------- Split / Marketplace
 // Pagamento de orçamento COMO o vendedor (conta conectada via OAuth), com
-// comissão do OrçaAI (platform_fee). Requer aplicação marketplace habilitada
+// comissão do OrçaAI (marketplace_fee). Requer aplicação marketplace habilitada
 // pelo Mercado Pago (Settings → "Cobrar por outros vendedores" / Marketplace).
 
 export interface SplitPreference {
@@ -189,7 +189,7 @@ export interface SplitPreference {
 /**
  * Cria a preferência de pagamento de um ORÇAMENTO usando o token do VENDEDOR.
  * - Authorization: token do vendedor (conectado via OAuth).
- * - platform_fee: comissão do OrçaAI em centavos (2% free; 0 pago).
+ * - platformFee: comissão do OrçaAI em REAIS (2% free; 0 pago) — campo marketplace_fee.
  * - marketplace: user_id do vendedor (divisão/split do pagamento).
  */
 export async function createSplitCheckoutPreference(input: {
@@ -213,12 +213,15 @@ export async function createSplitCheckoutPreference(input: {
         {
           title: `Orçamento ${'#' + String(input.quoteNumber).padStart(4, '0')} — ${input.customerName}`,
           quantity: 1,
-          unit_price: Math.round(input.amount * 100),
+          unit_price: input.amount, // REAIS (não centavos)
           currency_id: 'BRL',
         },
       ],
-      marketplace: input.sellerMpUserId, // divide o pagamento para o vendedor
-      platform_fee: Math.round(input.platformFee * 100), // comissão do OrçaAI
+      // No split via Checkout Pro, a preferência é criada com o token do
+      // VENDEDOR e a comissão do OrçaAI vai em marketplace_fee (em reais).
+      // O campo `marketplace` não é usado neste modelo (o destinatário é o
+      // próprio dono do token; a comissão vai para a conta marketplace do app).
+      marketplace_fee: input.platformFee, // comissão do OrçaAI (REAIS)
       external_reference: `quote:${input.companyId}:${input.quoteId}`,
       notification_url: `${getSiteUrl()}/api/billing/webhook`,
       back_urls: {

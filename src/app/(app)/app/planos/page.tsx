@@ -62,6 +62,23 @@ function PlansPageContent() {
     if (status === 'success' || status === 'pending' || status === 'failure') {
       setStatusBanner(status);
       if (status === 'success') {
+        // Finalização automática: ativa o plano na volta do checkout (além do webhook)
+        const sp = new URLSearchParams(searchParams.toString());
+        const body = {
+          status: sp.get('collection_status') ?? 'approved',
+          externalReference: sp.get('external_reference') ?? '',
+          paymentId: sp.get('collection_id') ?? sp.get('payment_id') ?? '',
+          preferenceId: sp.get('preference_id') ?? '',
+        };
+        fetch('/api/billing/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+          .then(() => refresh())
+          .catch(() => refresh())
+          .finally(() => loadBilling());
+      } else {
         refresh();
         loadBilling();
       }

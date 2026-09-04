@@ -121,11 +121,6 @@ export function formatPlanPrice(plan: Plan): string {
   return plan.price === 0 ? 'R$ 0' : `R$${plan.price}`;
 }
 
-/** Preço em centavos (Mercado Pago trabalha com centavos). */
-export function planPriceCents(plan: Plan): number {
-  return Math.round(plan.price * 100);
-}
-
 // ---------------------------------------------------------------- Comissões
 /** Percentual de comissão do OrçaAI sobre pagamentos pelo link (free=2%, pago=0%). */
 export function platformFeePercent(planId: PlanId): number {

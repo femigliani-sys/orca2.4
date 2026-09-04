@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { db, isDemo } from '@/lib/db';
+import { getSiteUrl } from '@/lib/site-url';
 import { BUSINESS_TYPES, VALIDITY_OPTIONS } from '@/lib/constants';
 import { DEFAULT_SETTINGS, DEFAULT_QUOTE_MESSAGE } from '@/lib/defaults';
 import { buildWaLink } from '@/lib/whatsapp';
@@ -524,8 +525,8 @@ export default function SettingsPage() {
                   <p className="font-semibold text-ink-700">Para receber pagamentos reais:</p>
                   <ol className="mt-1 list-decimal space-y-0.5 pl-5">
                     <li>Sua aplicação no Mercado Pago precisa ser <strong>Marketplace</strong> (aceita pagamentos por outros vendedores).</li>
-                    <li>Adicione no ambiente: <code className="rounded bg-white px-1">MERCADO_PAGO_MARKETPLACE_CLIENT_ID</code> (client id do app) e <code className="rounded bg-white px-1">MERCADO_PAGO_ACCESS_TOKEN</code> (secret).</li>
-                    <li>No painel do MP, cadastre a URL de redirect: <code className="rounded bg-white px-1">{process.env.NEXT_PUBLIC_SITE_URL || ''}/api/mp/callback</code>.</li>
+                    <li>Adicione no ambiente: <code className="rounded bg-white px-1">MERCADO_PAGO_MARKETPLACE_CLIENT_ID</code> e <code className="rounded bg-white px-1">MERCADO_PAGO_MARKETPLACE_CLIENT_SECRET</code> (secret do app). Não use o MERCADO_PAGO_ACCESS_TOKEN como secret.</li>
+                    <li>No painel do MP, cadastre a URL de redirect (sem barra dupla): <code className="rounded bg-white px-1">{`${getSiteUrl()}/api/mp/callback`}</code>.</li>
                   </ol>
                 </div>
               )}

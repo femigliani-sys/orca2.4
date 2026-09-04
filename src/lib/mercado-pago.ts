@@ -239,12 +239,118 @@ export async function createSplitCheckoutPreference(input: {
   return { id: data.id, initPoint: data.init_point };
 }
 
-/** URL de autorização OAuth do vendedor (marketplace). */
-export function buildSellerOAuthUrl(companyId: string, clientId: string): string {
-  const redirect = `${getSiteUrl()}/api/mp/callback`;
+// ================================================================
+// OAuth do VENDEDOR (Marketplace) — helpers centralizados
+// ================================================================
+
+/** credenciais da aplicação MARKETPLACE (nunca a conta dona do app). */
+export function getMarketplaceCredentials(): {
+  clientId: string | null;
+  clientSecret: string | null;
+} {
+  return {
+    clientId: process.env.MERCADO_PAGO_MARKETPLACE_CLIENT_ID?.trim() || null,
+    clientSecret: process.env.MERCADO_PAGO_MARKETPLACE_CLIENT_SECRET?.trim() || null,
+  };
+}
+
+/** ÚNICA fonte da redirect_uri do OAuth (sem barras duplicadas). */
+export function getOAuthRedirectUri(): string {
+  return `${getSiteUrl()}/api/mp/callback`; // getSiteUrl já remove '/' do final
+}
+
+/**
+ * Monta a URL de autorização (tela do Mercado Pago onde o vendedor aprova).
+ */
+export function buildSellerOAuthUrl(clientId: string, state: string): string {
+  const redirect = encodeURIComponent(getOAuthRedirectUri());
   return (
-    `https://auth.mercadopago.com.br/authorization?client_id=${clientId}` +
-    `&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirect)}` +
-    `&state=${encodeURIComponent(companyId)}`
+    `https://auth.mercadopago.com.br/authorization` +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&response_type=code` +
+    `&platform_id=mp` +
+    `&redirect_uri=${redirect}` +
+    `&state=${encodeURIComponent(state)}`
   );
+}
+
+export interface OAuthTokenResult {
+  ok: boolean;
+  accessToken?: string;
+  refreshToken?: string;
+  userId?: string;
+  expiresIn?: number;
+  status?: number;
+  body?: string;
+  message?: string;
+}
+
+/**
+ * Troca o `code` do OAuth pelo access_token do vendedor.
+ * Usa MERCADO_PAGO_MARKETPLACE_CLIENT_ID + _SECRET (nunca o token do dono).
+ * Em caso de erro, retorna status HTTP e o corpo REAL da API do Mercado Pago.
+ */
+export async function exchangeOAuthCodeForToken(code: string): Promise<OAuthTokenResult> {
+  const { clientId, clientSecret } = getMarketplaceCredentials();
+  if (!clientId || !clientSecret) {
+    return {
+      ok: false,
+      message:
+        'Faltam as variáveis MERCADO_PAGO_MARKETPLACE_CLIENT_ID e MERCADO_PAGO_MARKETPLACE_CLIENT_SECRET.',
+    };
+  }
+
+  const redirectUri = getOAuthRedirectUri();
+  const body = {
+    grant_type: 'authorization_code',
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    redirect_uri: redirectUri,
+  };
+
+  let res: Response;
+  try {
+    res = await fetch('https://api.mercadopago.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return { ok: false, message: `Erro de rede ao chamar o MP: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  const raw = await res.text(); // captura o corpo REAL
+  let json: Record<string, unknown> | null = null;
+  try {
+    json = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+  } catch {
+    json = null;
+  }
+
+  console.log('[mp-oauth] POST /oauth/token status=', res.status, 'body=', raw.slice(0, 600));
+
+  if (!res.ok) {
+    const apiMessage = (json as { message?: string } | null)?.message
+      ?? (json as { error_description?: string } | null)?.error_description
+      ?? (json as { error?: string } | null)?.error
+      ?? raw.slice(0, 300);
+    return { ok: false, status: res.status, body: raw, message: `Mercado Pago respondeu ${res.status}: ${apiMessage}` };
+  }
+  if (!json || typeof json.access_token !== 'string') {
+    return {
+      ok: false,
+      status: res.status,
+      body: raw,
+      message: `Resposta inesperada do MP (sem access_token). Status ${res.status}: ${raw.slice(0, 300)}`,
+    };
+  }
+
+  return {
+    ok: true,
+    accessToken: json.access_token as string,
+    refreshToken: typeof json.refresh_token === 'string' ? (json.refresh_token as string) : undefined,
+    userId: json.user_id != null ? String(json.user_id) : undefined,
+    expiresIn: typeof json.expires_in === 'number' ? (json.expires_in as number) : undefined,
+  };
 }

@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { isSupabaseConfigured } from '@/lib/supabase';
-import { getSiteUrl } from '@/lib/site-url';
 import { PLANS } from '@/lib/plans';
+import {
+  getMarketplaceCredentials,
+  buildSellerOAuthUrl,
+  getOAuthRedirectUri,
+} from '@/lib/mercado-pago';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +18,6 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    // Modo demonstração: sem servidor, sem tokens — estado é lido no cliente
     return NextResponse.json({ demo: true });
   }
   const supabase = await createServerSupabase().catch(() => null);
@@ -40,25 +43,29 @@ export async function GET() {
     .maybeSingle();
 
   const plan = PLANS.find((pl) => pl.id === company.plan);
+  const { clientId, clientSecret } = getMarketplaceCredentials();
+
+  let connectUrl: string | null = null;
+  let warning: string | null = null;
+  if (acc?.status === 'ativo') {
+    connectUrl = null;
+  } else if (!clientId || !clientSecret) {
+    warning = 'Configure MERCADO_PAGO_MARKETPLACE_CLIENT_ID e MERCADO_PAGO_MARKETPLACE_CLIENT_SECRET para gerar o link de conexão do vendedor.';
+  } else {
+    // Gera a URL pela função central (redirect_uri sem barras duplicadas)
+    connectUrl = buildSellerOAuthUrl(clientId, company.id);
+  }
+
   return NextResponse.json({
-    configured: Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN),
-    oauthClientConfigured: Boolean(process.env.MERCADO_PAGO_MARKETPLACE_CLIENT_ID),
-    accountConnected: Boolean(acc) && (acc?.status === 'ativo'),
+    configured: Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN), // pagamentos de planos
+    oauthClientConfigured: Boolean(clientId) && Boolean(clientSecret),
+    accountConnected: Boolean(acc) && acc?.status === 'ativo',
     mpUserId: acc?.mp_user_id ?? null,
     feePercent: plan?.feePercent ?? 2,
     plan: company.plan,
-    connectUrl:
-      acc?.status === 'ativo'
-        ? null
-        : process.env.MERCADO_PAGO_MARKETPLACE_CLIENT_ID
-          ? `https://auth.mercadopago.com.br/authorization?client_id=${process.env.MERCADO_PAGO_MARKETPLACE_CLIENT_ID}&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(
-              `${getSiteUrl()}/api/mp/callback`,
-            )}&state=${encodeURIComponent(company.id)}`
-          : null,
-    warning:
-      !process.env.MERCADO_PAGO_MARKETPLACE_CLIENT_ID
-        ? 'Configure MERCADO_PAGO_MARKETPLACE_CLIENT_ID para gerar o link de conexão do vendedor.'
-        : null,
+    redirectUri: getOAuthRedirectUri(),
+    connectUrl,
+    warning,
   });
 }
 

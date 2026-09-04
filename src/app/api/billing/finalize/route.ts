@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getPayment } from '@/lib/mercado-pago';
+import { getPayment, getPaymentWithToken } from '@/lib/mercado-pago';
+import { PLANS } from '@/lib/plans';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -11,18 +12,18 @@ const bodySchema = z.object({
   externalReference: z.string().optional(),
   paymentId: z.string().optional(),
   preferenceId: z.string().optional(),
+  /** token público do orçamento (vem na back_url /o/pago?t=...) — caminho mais confiável */
+  token: z.string().optional(),
 });
 
 /**
  * POST /api/billing/finalize
- * Finalização automática quando o cliente VOLTA do checkout do Mercado Pago
- * (auto_return). Complementa o webhook: garante que o orçamento/plano seja
- * aprovado na hora mesmo se a notificação IPN atrasar ou não estiver
- * configurada.
+ * Finalização automática quando o cliente VOLTA do checkout (auto_return).
+ * Complementa o webhook: aprova o orçamento/plano na hora.
  *
- * Segurança: só ativa se o status retornado for "approved" (o Mercado Pago
- * só redireciona com auto_return=approved após pagamento aprovado). Quando há
- * payment_id, consulta a API para confirmar antes de ativar.
+ * Segurança: só ativa com status "approved" (o MP só redireciona aprovado
+ * quando auto_return=approved). Quando temos payment_id e um token capaz de
+ * ler (conta do app), consultamos a API para confirmar.
  */
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -42,29 +43,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
   }
 
-  const { status, externalReference, paymentId, preferenceId } = parsed.data;
+  const { status, externalReference, paymentId, preferenceId, token } = parsed.data;
   if (status !== 'approved') {
     return NextResponse.json({ ok: true, activated: false });
-  }
-
-  const extRef = externalReference ?? '';
-
-  // Verificação opcional na API do MP (quando temos o id do pagamento)
-  if (paymentId) {
-    try {
-      const mpPayment = await getPayment(paymentId);
-      if (mpPayment && mpPayment.status !== 'approved') {
-        return NextResponse.json({ ok: true, activated: false, reason: 'Pagamento não aprovado no MP.' });
-      }
-    } catch {
-      // segue em frente — não bloquear quando não dá para consultar (split usa token do vendedor)
-    }
   }
 
   const supabase = createClient(url, anon);
   const providerId = preferenceId ?? paymentId ?? null;
 
-  // Pagamento de ORÇAMENTO (link público): external_reference = quote:company:quote
+  // 1) Pagamento de ORÇAMENTO pelo token do link (caminho mais confiável)
+  if (token) {
+    const isUuid = /^[0-9a-f-]{36}$/i.test(token) || /^[0-9a-f]{32}$/i.test(token.replace(/-/g, ''));
+    if (isUuid) {
+      // Verificação opcional: se paymentId e o token do app leem, confirma.
+      if (paymentId) {
+        try {
+          const mp = await getPayment(paymentId);
+          if (mp && mp.status !== 'approved') {
+            return NextResponse.json({ ok: true, activated: false, reason: 'Não aprovado no MP.' });
+          }
+        } catch { /* segue */ }
+      }
+      const { error } = await supabase.rpc('finalize_quote_payment_by_token', {
+        p_token: token,
+        p_provider_id: providerId,
+      });
+      if (error) {
+        return NextResponse.json({ error: `Erro ao finalizar: ${error.message}` }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, activated: true, kind: 'quote' });
+    }
+  }
+
+  // 2) Pagamento de ORÇAMENTO por external_reference (quote:company:quote)
+  const extRef = externalReference ?? '';
   if (extRef.startsWith('quote:')) {
     const [, companyId, quoteId] = extRef.split(':');
     if (companyId && quoteId) {
@@ -80,13 +92,23 @@ export async function POST(req: Request) {
     }
   }
 
-  // Plano do app: external_reference = company:plan
+  // 3) Plano do app (external_reference = company:plan)
   const [companyId, planRaw] = extRef.split(':');
   if (companyId && (planRaw === 'pro' || planRaw === 'business')) {
+    if (paymentId) {
+      try {
+        const mp = await getPayment(paymentId);
+        if (mp && mp.status !== 'approved') {
+          return NextResponse.json({ ok: true, activated: false });
+        }
+      } catch { /* segue */ }
+    }
+    const plan = PLANS.find((p) => p.id === planRaw);
     const { error } = await supabase.rpc('finalize_plan_payment', {
       p_company_id: companyId,
       p_plan: planRaw,
       p_provider_id: providerId,
+      p_amount: plan?.price ?? null,
     });
     if (error) {
       return NextResponse.json({ error: `Erro ao finalizar: ${error.message}` }, { status: 500 });
@@ -94,5 +116,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, activated: true, kind: 'plan' });
   }
 
-  return NextResponse.json({ ok: true, activated: false, reason: 'external_reference não reconhecida.' });
+  return NextResponse.json({ ok: true, activated: false, reason: 'Referência não reconhecida.' });
 }

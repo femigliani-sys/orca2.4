@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Building2, FileText, Palette, Upload, X, MessageCircle, CheckCircle2, XCircle, Send, CreditCard, Link2, Unplug, Receipt } from 'lucide-react';
+import { Building2, FileText, Palette, Upload, X, MessageCircle, CheckCircle2, XCircle, Send, CreditCard, Link2, Unplug, Receipt, RefreshCw } from 'lucide-react';
 import { useData } from '@/components/providers/data-provider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const [payAccount, setPayAccount] = useState<Awaited<ReturnType<typeof db.getPaymentAccount>>>(null);
   const [quotePayments, setQuotePayments] = useState<Awaited<ReturnType<typeof db.listQuotePayments>>>([]);
   const [connectingPay, setConnectingPay] = useState(false);
+  const [syncingPay, setSyncingPay] = useState(false);
   const [payInfo, setPayInfo] = useState<string | null>(null);
 
   const loadPayments = async () => {
@@ -65,13 +66,34 @@ export default function SettingsPage() {
     } catch { /* silencioso */ }
   };
 
+  // Sincroniza com o MP: aprova pagamentos pendentes já pagos (rede de segurança)
+  const syncPayments = async (silent = false) => {
+    setSyncingPay(true);
+    try {
+      const res = await fetch('/api/mp/sync', { method: 'POST' });
+      const json = (await res.json().catch(() => ({}))) as { approved?: number; demo?: boolean; error?: string };
+      if (json.error) throw new Error(json.error);
+      await loadPayments();
+      if (!silent && !json.demo && (json.approved ?? 0) > 0) {
+        toast.success(`${json.approved} pagamento(s) atualizado(s)!`);
+      }
+    } catch (err) {
+      if (!silent) toast.error(err instanceof Error ? err.message : 'Falha ao sincronizar.');
+    } finally {
+      setSyncingPay(false);
+    }
+  };
+
 
   useEffect(() => {
     fetch('/api/whatsapp/status')
       .then((r) => r.json())
       .then((j) => setWaStatus(j))
       .catch(() => setWaStatus(null));
-    loadPayments();
+    loadPayments().then(() => {
+      // Auto-sincroniza uma vez ao abrir se houver pagamento pendente
+      syncPayments(true);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -535,9 +557,16 @@ export default function SettingsPage() {
 
           {/* Recebidos pelo link */}
           <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Pagamentos recebidos pelo link</CardTitle>
-              <CardDescription className="mt-1">Cobranças dos seus orçamentos aprovados e pagos.</CardDescription>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle>Pagamentos recebidos pelo link</CardTitle>
+                <CardDescription className="mt-1">Cobranças dos seus orçamentos aprovados e pagos.</CardDescription>
+              </div>
+              {!isDemo() && (
+                <Button size="sm" variant="secondary" loading={syncingPay} onClick={() => syncPayments(false)}>
+                  <RefreshCw className="size-3.5" /> Atualizar pendentes
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {quotePayments.length === 0 ? (

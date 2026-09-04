@@ -77,7 +77,8 @@ export async function POST(req: Request) {
       sellerMpUserId: account.mp_user_id ?? '',
       companyId: account.company_id ?? '',
       quoteId: account.quote_id ?? '',
-      quoteNumber: 0, // preenchido depois pelo webhook via quote_id
+      quoteToken: token, // token do link — usado na back_url p/ finalizar sem external_reference
+      quoteNumber: 0,
       customerName: account.customer_name ?? 'Cliente',
       amount,
       platformFee: fee,

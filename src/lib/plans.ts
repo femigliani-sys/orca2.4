@@ -72,7 +72,7 @@ export const PLANS: Plan[] = [
   {
     id: 'business',
     name: 'Business',
-    price: 99,
+    price: 1,
     tagline: 'Para equipes e operações maiores.',
     features: [
       'Tudo do plano Pro',

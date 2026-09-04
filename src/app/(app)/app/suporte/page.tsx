@@ -88,7 +88,7 @@ const GUIDES = [
     icon: CreditCard,
     tone: 'bg-violet-50 text-violet-600',
     body: [
-      'Em "Planos" você assina Pro (R$59/mês) ou Business (R$99/mês), vê o histórico de pagamentos e pode cancelar quando quiser.',
+      'Em "Planos" você assina Pro ou Business (valores em "Planos"), vê o histórico de pagamentos e pode cancelar quando quiser.',
       'Sem a chave do Mercado Pago, o checkout roda em modo simulado para teste.',
       'Ao pagar, os recursos (IA, pipeline, link público etc.) são liberados automaticamente.',
     ],
@@ -123,7 +123,7 @@ const FAQS = [
   },
   {
     q: 'Como libero a IA, pipeline e link público?',
-    a: 'Esses recursos são do plano Pro (R$59/mês) e Business (R$99/mês). Em "Planos", clique em "Assinar Pro/Business" e complete o pagamento (no modo demonstração o checkout é simulado).',
+    a: 'Esses recursos são dos planos Pro e Business. Em "Planos", clique em "Assinar Pro/Business" e complete o pagamento (no modo demonstração o checkout é simulado).',
   },
   {
     q: 'Como configuro o Supabase e as chaves?',

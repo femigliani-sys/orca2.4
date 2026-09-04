@@ -87,16 +87,24 @@ export interface MpPayment {
   payer?: { email?: string | null; first_name?: string | null } | null;
 }
 
-/** Busca um pagamento pela API (usado no webhook para validar e conferir status). */
+/** Busca um pagamento na API usando um token específico. */
+export async function getPaymentWithToken(paymentId: string, token: string): Promise<MpPayment | null> {
+  try {
+    const res = await fetch(`${API}/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as MpPayment;
+  } catch {
+    return null;
+  }
+}
+
+/** Busca um pagamento pela API (token do próprio app — planos/assinaturas). */
 export async function getPayment(paymentId: string): Promise<MpPayment | null> {
   const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
   if (!token) return null;
-  const res = await fetch(`${API}/v1/payments/${paymentId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as MpPayment;
-  return data;
+  return getPaymentWithToken(paymentId, token);
 }
 
 // ---------------------------------------------------------------- Assinatura
@@ -197,6 +205,7 @@ export async function createSplitCheckoutPreference(input: {
   sellerMpUserId: string;
   companyId: string;
   quoteId: string;
+  quoteToken: string;
   quoteNumber: number;
   customerName: string;
   amount: number; // R$
@@ -225,9 +234,9 @@ export async function createSplitCheckoutPreference(input: {
       external_reference: `quote:${input.companyId}:${input.quoteId}`,
       notification_url: `${getSiteUrl()}/api/billing/webhook`,
       back_urls: {
-        success: `${getSiteUrl()}/o/pago?ok=1`,
-        pending: `${getSiteUrl()}/o/pago?ok=0`,
-        failure: `${getSiteUrl()}/o/pago?ok=0`,
+        success: `${getSiteUrl()}/o/pago?ok=1&t=${encodeURIComponent(input.quoteToken)}`,
+        pending: `${getSiteUrl()}/o/pago?ok=0&t=${encodeURIComponent(input.quoteToken)}`,
+        failure: `${getSiteUrl()}/o/pago?ok=0&t=${encodeURIComponent(input.quoteToken)}`,
       },
       auto_return: 'approved',
       statement_descriptor: 'ORCAAI',
@@ -356,4 +365,20 @@ export async function exchangeOAuthCodeForToken(code: string): Promise<OAuthToke
     userId: json.user_id != null ? String(json.user_id) : undefined,
     expiresIn: typeof json.expires_in === 'number' ? (json.expires_in as number) : undefined,
   };
+}
+
+/** Busca pagamentos por external_reference usando um token (ex.: do vendedor). */
+export async function searchPaymentsByExternalReference(
+  token: string,
+  externalReference: string,
+): Promise<MpPayment[] | null> {
+  try {
+    const url = `${API}/v1/payments/search?external_reference=${encodeURIComponent(externalReference)}&limit=5`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { results?: MpPayment[] };
+    return data.results ?? [];
+  } catch {
+    return null;
+  }
 }

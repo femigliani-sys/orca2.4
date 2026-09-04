@@ -35,7 +35,7 @@ preços cadastrados pela própria empresa**.
 - **Pipeline de vendas** estilo Kanban com arrastar e soltar
 - **Meus serviços** (CRUD, duplicar, ativar/desativar, categorias)
 - **Configurações** da empresa, padrões de orçamento e aparência do PDF
-- **Planos** (Grátis / Pro R$59 / Business R$99) com preços centralizados em um arquivo
+- **Planos** (Grátis, Pro e Business) com preços centralizados em um arquivo (`src/lib/plans.ts` — o Business usa R$1/mês para testes)
 - **Sistema de compra completo**:
   - Página de checkout dedicada (`/app/planos/checkout?plan=pro`) com escolha de **Pix, cartão ou boleto**
   - **Assinatura recorrente mensal** via Mercado Pago (preapproval) com fallback para Checkout Pro
@@ -119,7 +119,7 @@ NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY=
 > cria uma **assinatura recorrente** (preapproval) — cobrança mensal automática — com fallback para
 > pagamento único (Checkout Pro). Configure o webhook do MP para
 > `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** (com aviso).
-> Migrações necessárias: `0001` a `0007`. IMPORTANTE: o Mercado Pago Checkout Pro usa
+> Migrações necessárias: `0001` a `0008`. IMPORTANTE: o Mercado Pago Checkout Pro usa
 > valores em **REAIS** (não centavos) em `unit_price`/`transaction_amount`/`marketplace_fee` —
 > não multiplique por 100. A ativação pós-pagamento é feita pelo webhook E pela finalização
 > automática no retorno (`/api/billing/finalize` + migração 0007).

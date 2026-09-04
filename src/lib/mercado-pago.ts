@@ -41,7 +41,7 @@ export async function createCheckoutPreference(input: {
     body: JSON.stringify({
       items: [
         {
-          title: `OrçaAI — Plano ${plan.name} (assinatura mensal)`,
+          title: `OrçaAI — Plano ${plan.name}`, // Checkout Pro único: Pix, cartão ou boleto
           quantity: 1,
           unit_price: plan.price, // Checkout Pro usa REAIS (não centavos)
           currency_id: 'BRL',

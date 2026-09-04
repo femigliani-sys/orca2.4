@@ -116,8 +116,9 @@ NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY=
 
 > 💳 **Pagamentos:** crie um app em [mercadopago.com.br/developers](https://www.mercadopago.com.br/developers)
 > e copie o *Access Token* (produção). Com a chave no servidor (`MERCADO_PAGO_ACCESS_TOKEN`), o checkout
-> cria uma **assinatura recorrente** (preapproval) — cobrança mensal automática — com fallback para
-> pagamento único (Checkout Pro). Configure o webhook do MP para
+> o checkout usa **Checkout Pro de pagamento único** (o cliente paga com **Pix, cartão ou boleto**
+> na tela do Mercado Pago). Obs.: não usamos preapproval/recorrência do MP porque ele só aceita
+> cartão (sem Pix). Configure o webhook do MP para
 > `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** (com aviso).
 > Migrações necessárias: `0001` a `0008`. IMPORTANTE: o Mercado Pago Checkout Pro usa
 > valores em **REAIS** (não centavos) em `unit_price`/`transaction_amount`/`marketplace_fee` —

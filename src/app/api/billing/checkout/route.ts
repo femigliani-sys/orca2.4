@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
-import {
-  createCheckoutPreference,
-  createPreapproval,
-  isMercadoPagoConfigured,
-} from '@/lib/mercado-pago';
+import { createCheckoutPreference, isMercadoPagoConfigured } from '@/lib/mercado-pago';
 import { PLANS } from '@/lib/plans';
 import { z } from 'zod';
 
@@ -84,30 +80,19 @@ export async function POST(req: Request) {
   // ============================================================ Modo real
   if (isMercadoPagoConfigured()) {
     try {
-      // 1) Tenta assinatura recorrente (preapproval)
-      let initPoint: string | null = null;
-      try {
-        const preapproval = await createPreapproval({
-          plan,
-          companyId: company.id,
-          email: user.email ?? undefined,
-        });
-        if (preapproval.init_point) initPoint = preapproval.init_point;
-      } catch (err) {
-        console.warn('[checkout] preapproval falhou, usando checkout único:', err instanceof Error ? err.message : err);
-      }
-
-      // 2) Fallback: checkout único
-      if (!initPoint) {
-        const preference = await createCheckoutPreference({ plan, companyId: company.id, email: user.email ?? undefined });
-        initPoint = preference.initPoint;
-      }
-
-      if (!initPoint) throw new Error('Não foi possível gerar o link de pagamento.');
+      // Usamos o Checkout Pro de PAGAMENTO ÚNICO (não preapproval/recorrência):
+      // o preapproval do Mercado Pago só aceita CARTÃO (a recorrência exige
+      // cartão salvo), o que impedia Pix/boleto. Com o Checkout Pro único,
+      // o cliente escolhe Pix, cartão ou boleto na própria tela do MP.
+      const preference = await createCheckoutPreference({
+        plan,
+        companyId: company.id,
+        email: user.email ?? undefined,
+      });
 
       await upsertSubscription(supabase, company.id, plan, 'pendente', 'mercado_pago', paymentId);
 
-      return NextResponse.json({ initPoint, simulated: false });
+      return NextResponse.json({ initPoint: preference.initPoint, simulated: false });
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : 'Não foi possível iniciar o pagamento.' },

@@ -5,9 +5,11 @@ import type {
   GeneratedMessage,
   Notification,
   Payment,
+  PaymentAccount,
   PlanId,
   Quote,
   QuoteInput,
+  QuotePayment,
   QuoteStatus,
   Service,
   Subscription,
@@ -106,4 +108,13 @@ export interface DB {
   startCheckout(input: { plan: PlanId }): Promise<{ simulated: boolean; checkoutId?: string }>;
   /** Conclui um checkout simulado (modo demonstração). */
   completeCheckout(input: { checkoutId: string }): Promise<void>;
+
+  // --------------------------------------------------------- Pagamentos de orçamento (link público)
+  /** Conta de pagamento (Mercado Pago) conectada do vendedor. */
+  getPaymentAccount(): Promise<PaymentAccount | null>;
+  /** Marca a conta como conectada (modo demo simula; produção via OAuth no servidor). */
+  connectPaymentAccount(input: Partial<PaymentAccount>): Promise<PaymentAccount>;
+  disconnectPaymentAccount(): Promise<void>;
+  /** Lista pagamentos recebidos via link público (de todos os orçamentos). */
+  listQuotePayments(quoteId?: string): Promise<QuotePayment[]>;
 }

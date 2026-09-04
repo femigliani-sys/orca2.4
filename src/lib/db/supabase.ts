@@ -10,7 +10,9 @@ import type {
   GeneratedMessage,
   Notification,
   Payment,
+  PaymentAccount,
   PlanId,
+  QuotePayment,
   Quote,
   QuoteInput,
   QuoteStatus,
@@ -29,7 +31,9 @@ import type {
   FollowUpsRow,
   MessagesRow,
   NotificationsRow,
+  PaymentAccountsRow,
   PaymentsRow,
+  QuotePaymentsRow,
   QuoteItemsRow,
   QuotesRow,
   ServicesRow,
@@ -1015,6 +1019,78 @@ export function createSupabaseDB(client: SupabaseClient): DB {
         });
       }
       await client.from('companies').update({ plan }).eq('id', company.id);
+    },
+
+    async getPaymentAccount() {
+      const { company } = await requireCompany();
+      const { data } = await client
+        .from('payment_accounts')
+        .select('*')
+        .eq('company_id', company.id)
+        .maybeSingle();
+      if (!data) return null;
+      const a = data as PaymentAccountsRow;
+      return {
+        companyId: a.company_id,
+        provider: (a.provider as PaymentAccount['provider']) ?? 'mercado_pago',
+        mpUserId: a.mp_user_id ?? undefined,
+        // access_token NUNCA é enviado ao navegador
+        status: (a.status as PaymentAccount['status']) ?? 'ativo',
+        connectedAt: a.connected_at,
+        expiresAt: a.expires_at,
+      } as PaymentAccount;
+    },
+
+    async connectPaymentAccount(input) {
+      const { company } = await requireCompany();
+      const row: Record<string, unknown> = {
+        company_id: company.id,
+        provider: input.provider ?? 'mercado_pago',
+        mp_user_id: input.mpUserId ?? null,
+        access_token: input.accessToken ?? null,
+        refresh_token: input.refreshToken ?? null,
+        status: input.status ?? 'ativo',
+        connected_at: new Date().toISOString(),
+      };
+      if (input.expiresAt) row.expires_at = input.expiresAt;
+      const { data, error } = await client
+        .from('payment_accounts')
+        .upsert(row, { onConflict: 'company_id' })
+        .select()
+        .single();
+      if (error) throw error;
+      return { companyId: company.id, provider: 'mercado_pago', status: 'ativo' };
+    },
+
+    async disconnectPaymentAccount() {
+      const { company } = await requireCompany();
+      await client.from('payment_accounts').delete().eq('company_id', company.id);
+    },
+
+    async listQuotePayments(quoteId) {
+      const { company } = await requireCompany();
+      let q = client
+        .from('quote_payments')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (quoteId) q = q.eq('quote_id', quoteId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return ((data as QuotePaymentsRow[]) ?? []).map((p) => ({
+        id: p.id,
+        companyId: p.company_id,
+        quoteId: p.quote_id,
+        amount: Number(p.amount),
+        platformFee: Number(p.platform_fee),
+        sellerReceives: Number(p.seller_receives),
+        status: p.status as QuotePayment['status'],
+        provider: p.provider,
+        providerId: p.provider_id,
+        payerName: p.payer_name,
+        createdAt: p.created_at,
+        paidAt: p.paid_at,
+      }));
     },
 
     async listPayments() {

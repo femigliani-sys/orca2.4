@@ -83,6 +83,8 @@ export interface MpPayment {
   status: 'approved' | 'pending' | 'in_process' | 'rejected' | 'cancelled' | 'refunded';
   status_detail: string;
   external_reference: string | null;
+  transaction_amount?: number | null;
+  payer?: { email?: string | null; first_name?: string | null } | null;
 }
 
 /** Busca um pagamento pela API (usado no webhook para validar e conferir status). */
@@ -172,4 +174,77 @@ export async function getPreapproval(preapprovalId: string): Promise<Preapproval
   });
   if (!res.ok) return null;
   return (await res.json()) as Preapproval;
+}
+
+// ---------------------------------------------------------------- Split / Marketplace
+// Pagamento de orçamento COMO o vendedor (conta conectada via OAuth), com
+// comissão do OrçaAI (platform_fee). Requer aplicação marketplace habilitada
+// pelo Mercado Pago (Settings → "Cobrar por outros vendedores" / Marketplace).
+
+export interface SplitPreference {
+  id: string;
+  initPoint: string;
+}
+
+/**
+ * Cria a preferência de pagamento de um ORÇAMENTO usando o token do VENDEDOR.
+ * - Authorization: token do vendedor (conectado via OAuth).
+ * - platform_fee: comissão do OrçaAI em centavos (2% free; 0 pago).
+ * - marketplace: user_id do vendedor (divisão/split do pagamento).
+ */
+export async function createSplitCheckoutPreference(input: {
+  sellerAccessToken: string;
+  sellerMpUserId: string;
+  companyId: string;
+  quoteId: string;
+  quoteNumber: number;
+  customerName: string;
+  amount: number; // R$
+  platformFee: number; // R$
+}): Promise<SplitPreference> {
+  const res = await fetch(`${API}/checkout/preferences`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${input.sellerAccessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      items: [
+        {
+          title: `Orçamento ${'#' + String(input.quoteNumber).padStart(4, '0')} — ${input.customerName}`,
+          quantity: 1,
+          unit_price: Math.round(input.amount * 100),
+          currency_id: 'BRL',
+        },
+      ],
+      marketplace: input.sellerMpUserId, // divide o pagamento para o vendedor
+      platform_fee: Math.round(input.platformFee * 100), // comissão do OrçaAI
+      external_reference: `quote:${input.companyId}:${input.quoteId}`,
+      notification_url: `${getSiteUrl()}/api/billing/webhook`,
+      back_urls: {
+        success: `${getSiteUrl()}/o/pago?ok=1`,
+        pending: `${getSiteUrl()}/o/pago?ok=0`,
+        failure: `${getSiteUrl()}/o/pago?ok=0`,
+      },
+      auto_return: 'approved',
+      statement_descriptor: 'ORCAAI',
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao gerar o pagamento (${res.status}). ${text.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { id: string; init_point: string };
+  return { id: data.id, initPoint: data.init_point };
+}
+
+/** URL de autorização OAuth do vendedor (marketplace). */
+export function buildSellerOAuthUrl(companyId: string, clientId: string): string {
+  const redirect = `${getSiteUrl()}/api/mp/callback`;
+  return (
+    `https://auth.mercadopago.com.br/authorization?client_id=${clientId}` +
+    `&response_type=code&platform_id=mp&redirect_uri=${encodeURIComponent(redirect)}` +
+    `&state=${encodeURIComponent(companyId)}`
+  );
 }

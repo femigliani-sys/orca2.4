@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Building2, FileText, Palette, Upload, X, MessageCircle, CheckCircle2, XCircle, Send } from 'lucide-react';
+import { Building2, FileText, Palette, Upload, X, MessageCircle, CheckCircle2, XCircle, Send, CreditCard, Link2, Unplug, Receipt } from 'lucide-react';
 import { useData } from '@/components/providers/data-provider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { db } from '@/lib/db';
+import { db, isDemo } from '@/lib/db';
 import { BUSINESS_TYPES, VALIDITY_OPTIONS } from '@/lib/constants';
 import { DEFAULT_SETTINGS, DEFAULT_QUOTE_MESSAGE } from '@/lib/defaults';
 import { buildWaLink } from '@/lib/whatsapp';
@@ -50,11 +50,28 @@ export default function SettingsPage() {
   const [testPhone, setTestPhone] = useState('');
   const [testing, setTesting] = useState(false);
 
+  // Pagamentos (conta MP do vendedor)
+  const [payAccount, setPayAccount] = useState<Awaited<ReturnType<typeof db.getPaymentAccount>>>(null);
+  const [quotePayments, setQuotePayments] = useState<Awaited<ReturnType<typeof db.listQuotePayments>>>([]);
+  const [connectingPay, setConnectingPay] = useState(false);
+  const [payInfo, setPayInfo] = useState<string | null>(null);
+
+  const loadPayments = async () => {
+    try {
+      const [acc, list] = await Promise.all([db.getPaymentAccount(), db.listQuotePayments()]);
+      setPayAccount(acc);
+      setQuotePayments(list);
+    } catch { /* silencioso */ }
+  };
+
+
   useEffect(() => {
     fetch('/api/whatsapp/status')
       .then((r) => r.json())
       .then((j) => setWaStatus(j))
       .catch(() => setWaStatus(null));
+    loadPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -176,6 +193,7 @@ export default function SettingsPage() {
           <TabsTrigger value="empresa"><Building2 className="mr-1.5 size-4" /> Empresa</TabsTrigger>
           <TabsTrigger value="orcamentos"><FileText className="mr-1.5 size-4" /> Orçamentos</TabsTrigger>
           <TabsTrigger value="whatsapp"><MessageCircle className="mr-1.5 size-4" /> WhatsApp</TabsTrigger>
+          <TabsTrigger value="pagamentos"><CreditCard className="mr-1.5 size-4" /> Pagamentos</TabsTrigger>
           <TabsTrigger value="aparencia"><Palette className="mr-1.5 size-4" /> Aparência</TabsTrigger>
         </TabsList>
 
@@ -407,6 +425,141 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* -------------------------------------------------- Pagamentos pelo link */}
+        <TabsContent value="pagamentos">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="size-4 text-emerald-600" /> Receber pagamentos pelo link do orçamento
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Quando o cliente abre o link público do orçamento, ele pode <strong>"Aprovar e pagar"</strong>.
+                O pagamento é processado pelo Mercado Pago e creditado na SUA conta.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className={`flex items-start gap-3 rounded-xl border p-4 ${payAccount?.status === 'ativo' ? 'border-emerald-200 bg-emerald-50' : 'border-ink-200 bg-ink-50/60'}`}>
+                  {payAccount?.status === 'ativo' ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" /> : <XCircle className="mt-0.5 size-5 shrink-0 text-ink-400" />}
+                  <div>
+                    <p className="text-sm font-semibold text-ink-900">{payAccount?.status === 'ativo' ? 'Conta conectada ✓' : 'Conta não conectada'}</p>
+                    <p className="mt-1 text-xs text-ink-500">
+                      {payAccount?.status === 'ativo'
+                        ? `Mercado Pago (${payAccount.mpUserId ?? 'simulada'}) — pronto para receber.`
+                        : 'Conecte sua conta do Mercado Pago para receber os pagamentos dos seus orçamentos.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-xl border border-ink-100 bg-ink-50/60 p-4">
+                  <Receipt className="mt-0.5 size-5 shrink-0 text-ink-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-ink-900">Taxa do seu plano</p>
+                    <p className="mt-1 text-xs text-ink-500">
+                      {company.plan === 'free'
+                        ? 'Plano Grátis: o OrçaAI recebe 2% de cada pagamento (você recebe 98% na hora).'
+                        : `Plano ${company.plan === 'pro' ? 'Pro' : 'Business'}: 100% do valor vai para você — sem taxas.`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {payAccount?.status === 'ativo' ? (
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      await db.disconnectPaymentAccount();
+                      setPayAccount(null);
+                      toast.success('Conta de pagamento desconectada.');
+                    }}
+                  >
+                    <Unplug className="size-4" /> Desconectar conta
+                  </Button>
+                ) : (
+                  <Button
+                    variant="whatsapp"
+                    loading={connectingPay}
+                    onClick={async () => {
+                      setConnectingPay(true);
+                      try {
+                        if (isDemo()) {
+                          // Simulação: conecta conta simulada
+                          const acc = await db.connectPaymentAccount({ provider: 'simulado', mpUserId: 'simulado' });
+                          setPayAccount(acc);
+                          toast.success('Conta conectada (simulação) — teste o fluxo de pagamento pelo link!');
+                        } else {
+                          const res = await fetch('/api/mp/account');
+                          const json = (await res.json().catch(() => ({}))) as {
+                            connectUrl?: string | null;
+                            warning?: string | null;
+                            error?: string;
+                          };
+                          if (json.error) throw new Error(json.error);
+                          if (json.connectUrl) {
+                            window.location.href = json.connectUrl; // OAuth do Mercado Pago
+                          } else {
+                            toast.warning(json.warning || 'Configure a aplicação marketplace (MERCADO_PAGO_MARKETPLACE_CLIENT_ID).');
+                          }
+                        }
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Falha ao conectar.');
+                      } finally {
+                        setConnectingPay(false);
+                      }
+                    }}
+                  >
+                    <Link2 className="size-4" /> Conectar conta Mercado Pago
+                  </Button>
+                )}
+              </div>
+              {payInfo && <p className="text-xs text-amber-600">{payInfo}</p>}
+
+              {!isDemo() && (
+                <div className="rounded-xl border border-ink-100 bg-ink-50/50 p-4 text-xs text-ink-500">
+                  <p className="font-semibold text-ink-700">Para receber pagamentos reais:</p>
+                  <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+                    <li>Sua aplicação no Mercado Pago precisa ser <strong>Marketplace</strong> (aceita pagamentos por outros vendedores).</li>
+                    <li>Adicione no ambiente: <code className="rounded bg-white px-1">MERCADO_PAGO_MARKETPLACE_CLIENT_ID</code> (client id do app) e <code className="rounded bg-white px-1">MERCADO_PAGO_ACCESS_TOKEN</code> (secret).</li>
+                    <li>No painel do MP, cadastre a URL de redirect: <code className="rounded bg-white px-1">{process.env.NEXT_PUBLIC_SITE_URL || ''}/api/mp/callback</code>.</li>
+                  </ol>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recebidos pelo link */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Pagamentos recebidos pelo link</CardTitle>
+              <CardDescription className="mt-1">Cobranças dos seus orçamentos aprovados e pagos.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {quotePayments.length === 0 ? (
+                <p className="rounded-xl bg-ink-50 p-4 text-center text-xs text-ink-400">
+                  Nenhum pagamento ainda. Compartilhe o link de um orçamento (aba do orçamento) e peça para o cliente pagar.
+                </p>
+              ) : (
+                <ul className="divide-y divide-ink-100">
+                  {quotePayments.slice(0, 10).map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                      <div>
+                        <p className="font-medium text-ink-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.amount)}</p>
+                        <p className="text-xs text-ink-400">{new Date(p.createdAt).toLocaleDateString('pt-BR')} · {p.payerName ?? 'cliente'}</p>
+                      </div>
+                      <div className="text-right text-xs text-ink-500">
+                        <p>{p.platformFee > 0 ? 'Taxa OrçaAI: ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.platformFee) : 'Sem taxa'}</p>
+                        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${p.status === 'aprovado' ? 'bg-emerald-50 text-emerald-700' : p.status === 'pendente' ? 'bg-amber-50 text-amber-700' : 'bg-ink-100 text-ink-500'}`}>
+                          {p.status === 'aprovado' ? 'Aprovado' : p.status === 'pendente' ? 'Pendente' : p.status}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>

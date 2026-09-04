@@ -155,3 +155,29 @@ export interface PaymentsRow {
   created_at: string;
   paid_at: string | null;
 }
+
+export interface PaymentAccountsRow {
+  company_id: string;
+  provider: string;
+  mp_user_id: string | null;
+  access_token: string | null;
+  refresh_token: string | null;
+  expires_at: string | null;
+  status: string;
+  connected_at: string;
+}
+
+export interface QuotePaymentsRow {
+  id: string;
+  quote_id: string;
+  company_id: string;
+  amount: number;
+  platform_fee: number;
+  seller_receives: number;
+  status: string;
+  provider: string | null;
+  provider_id: string | null;
+  payer_name: string | null;
+  created_at: string;
+  paid_at: string | null;
+}

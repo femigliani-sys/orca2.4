@@ -188,6 +188,36 @@ export interface Payment {
   paidAt?: string | null;
 }
 
+/** Conta Mercado Pago do vendedor conectada (para receber pagamentos pelo link). */
+export interface PaymentAccount {
+  companyId: ID;
+  provider: 'mercado_pago' | 'simulado';
+  mpUserId?: string | null;
+  accessToken?: string | null; // só no servidor/banco (nunca exposto ao navegador)
+  refreshToken?: string | null;
+  expiresAt?: string | null;
+  connectedAt?: string | null;
+  status: 'ativo' | 'pendente' | 'desconectado';
+}
+
+/** Pagamento de UM ORÇAMENTO feito pelo cliente (link público). */
+export type QuotePaymentStatus = 'pendente' | 'aprovado' | 'recusado' | 'cancelado' | 'reembolsado';
+
+export interface QuotePayment {
+  id: ID;
+  companyId: ID;
+  quoteId: ID;
+  amount: number; // total pago pelo cliente
+  platformFee: number; // comissão do OrçaAI (R$)
+  sellerReceives: number; // valor líquido do vendedor
+  status: QuotePaymentStatus;
+  provider?: string | null;
+  providerId?: string | null;
+  payerName?: string | null;
+  createdAt: string;
+  paidAt?: string | null;
+}
+
 // ---------------------------------------------------------------- Assinatura
 export type PlanId = 'free' | 'pro' | 'business';
 
@@ -230,7 +260,10 @@ export interface Plan {
     multiUser: boolean;
     automations: boolean;
     shareLinks: boolean;
+    payments: boolean; // aceitar pagamento pelo link público do orçamento
   };
+  /** Percentual de comissão do OrçaAI sobre pagamentos recebidos (0-100). */
+  feePercent: number;
   highlighted?: boolean;
 }
 

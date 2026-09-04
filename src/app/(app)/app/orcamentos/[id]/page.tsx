@@ -58,6 +58,7 @@ export default function QuoteDetailPage() {
   const [creatingFollowUp, setCreatingFollowUp] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [paidInfos, setPaidInfos] = useState<Awaited<ReturnType<typeof db.listQuotePayments>>>([]);
 
   const quoteFollowUps = useMemo(
     () => followUps.filter((f) => f.quoteId === quoteId).sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor)),
@@ -79,7 +80,10 @@ export default function QuoteDetailPage() {
 
   useEffect(() => {
     loadMessages();
-  }, [loadMessages]);
+    db.listQuotePayments(quoteId)
+      .then(setPaidInfos)
+      .catch(() => setPaidInfos([]));
+  }, [loadMessages, quoteId]);
 
   if (!company || !quote) {
     return (
@@ -376,9 +380,8 @@ export default function QuoteDetailPage() {
                 <Link2 className="size-4 text-brand-600" /> Link público do orçamento
               </CardTitle>
               <CardDescription className="mt-1">
-                {shareEnabled
-                  ? 'Compartilhe este link: o cliente vê o orçamento, baixa o PDF e aprova online.'
-                  : 'Recurso do plano Pro: seu cliente visualiza e aprova o orçamento pelo link.'}
+                Compartilhe este link: o cliente vê o orçamento, baixa o PDF e pode{' '}
+                <strong>aprovar e pagar online</strong>.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -435,7 +438,16 @@ export default function QuoteDetailPage() {
                   </div>
                   <p className="text-[11px] text-ink-400">
                     Ao abrir o link, o orçamento é marcado como "Visualizado" automaticamente.
+                    {' '}
+                    {company.plan === 'free'
+                      ? 'Plano grátis: taxa de 2% do OrçaAI por pagamento recebido.'
+                      : `Plano ${company.plan === 'pro' ? 'Pro' : 'Business'}: pagamento 100% para você, sem taxas.`}
                   </p>
+                  {paidInfos.filter((pp) => pp.status === 'aprovado').length > 0 && (
+                    <p className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                      <CheckCircle2 className="size-3.5" /> Pagamento recebido pelo link!
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ink-200 bg-ink-50/50 px-4 py-5 text-center">

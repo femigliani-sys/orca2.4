@@ -17,6 +17,7 @@ export const PLANS: Plan[] = [
       'Até 30 clientes',
       'Geração de PDF básico',
       'Compartilhamento via WhatsApp',
+      'Link público do orçamento com pagamento (taxa de 2%)',
     ],
     limits: {
       quotesPerMonth: FREE_MONTHLY_QUOTES,
@@ -29,8 +30,10 @@ export const PLANS: Plan[] = [
       metrics: false,
       multiUser: false,
       automations: false,
-      shareLinks: false,
+      shareLinks: true,
+      payments: true,
     },
+    feePercent: 2,
   },
   {
     id: 'pro',
@@ -47,6 +50,7 @@ export const PLANS: Plan[] = [
       'Follow-ups automáticos e lembretes',
       'Métricas e taxa de conversão',
       'Link público do orçamento (cliente aprova online)',
+      'Pagamento pelo link SEM taxas (100% para você)',
       'Sem marca d\'água',
     ],
     limits: {
@@ -61,7 +65,9 @@ export const PLANS: Plan[] = [
       multiUser: false,
       automations: false,
       shareLinks: true,
+      payments: true,
     },
+    feePercent: 0,
   },
   {
     id: 'business',
@@ -75,6 +81,7 @@ export const PLANS: Plan[] = [
       'Automações de follow-up',
       'Relatórios avançados',
       'Link público do orçamento (cliente aprova online)',
+      'Pagamento pelo link SEM taxas (100% para você)',
       'Prioridade no suporte',
     ],
     limits: {
@@ -89,7 +96,9 @@ export const PLANS: Plan[] = [
       multiUser: true,
       automations: true,
       shareLinks: true,
+      payments: true,
     },
+    feePercent: 0,
   },
 ];
 
@@ -115,4 +124,17 @@ export function formatPlanPrice(plan: Plan): string {
 /** Preço em centavos (Mercado Pago trabalha com centavos). */
 export function planPriceCents(plan: Plan): number {
   return Math.round(plan.price * 100);
+}
+
+// ---------------------------------------------------------------- Comissões
+/** Percentual de comissão do OrçaAI sobre pagamentos pelo link (free=2%, pago=0%). */
+export function platformFeePercent(planId: PlanId): number {
+  return getPlan(planId).feePercent ?? (planId === 'free' ? 2 : 0);
+}
+
+/** Calcula a comissão do OrçaAI em R$ para um valor (centavos corretos). */
+export function computePlatformFee(planId: PlanId, amount: number): { fee: number; seller: number } {
+  const pct = platformFeePercent(planId);
+  const fee = Math.round(amount * pct) / 100; // arredonda em 2 casas
+  return { fee, seller: Math.max(0, Math.round((amount - fee) * 100) / 100) };
 }

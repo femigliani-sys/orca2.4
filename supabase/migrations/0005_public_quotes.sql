@@ -42,6 +42,7 @@ begin
 
   select jsonb_build_object(
     'name', c.name,
+    'plan', c.plan,
     'phone', c.phone,
     'whatsapp', c.whatsapp,
     'email', c.email,

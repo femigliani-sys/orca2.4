@@ -18,6 +18,8 @@ import type {
   Service,
   Subscription,
   User,
+  PaymentAccount,
+  QuotePayment,
 } from '../types';
 import { demoHash } from '../auth';
 import { DEFAULT_SETTINGS } from '../defaults';
@@ -26,7 +28,7 @@ import { addDaysIso, generateId, isValidIsoDate, nowIso } from '../utils';
 import { FREE_MONTHLY_QUOTES } from '../constants';
 import { buildQuote, computeTotals, suggestedFollowUpDate } from '../quote-utils';
 import { sideEffectsFor, monthStart } from '../side-effects';
-import { getPlan } from '../plans';
+import { getPlan, computePlatformFee } from '../plans';
 import type { DB } from './types';
 
 // ---------------------------------------------------------------- Storage
@@ -89,6 +91,8 @@ interface UserData {
   messages: GeneratedMessage[];
   subscription: Subscription | null;
   payments: Payment[];
+  paymentAccount: PaymentAccount | null;
+  quotePayments: QuotePayment[];
   pendingCheckout?: { id: string; plan: PlanId } | null;
 }
 
@@ -104,6 +108,8 @@ function emptyUserData(company: Company): UserData {
     messages: [],
     subscription: null,
     payments: [],
+    paymentAccount: null,
+    quotePayments: [],
   };
 }
 
@@ -149,6 +155,8 @@ function normalizeData(data: UserData): UserData {
     notifications: Array.isArray(data.notifications) ? data.notifications : [],
     messages: Array.isArray(data.messages) ? data.messages : [],
     payments: Array.isArray(data.payments) ? data.payments : [],
+    paymentAccount: data.paymentAccount ?? null,
+    quotePayments: Array.isArray(data.quotePayments) ? data.quotePayments : [],
     pendingCheckout: data.pendingCheckout ?? null,
     quotes: Array.isArray(data.quotes)
       ? data.quotes.map((q) => ({
@@ -649,6 +657,40 @@ export const localDB: DB = {
     notify();
   },
 
+  // ============================================================ Pagamentos de orçamento
+  async getPaymentAccount() {
+    return getData()?.paymentAccount ?? null;
+  },
+
+  async connectPaymentAccount(input) {
+    const { userId, data } = requireData();
+    data.paymentAccount = {
+      companyId: data.company.id,
+      provider: input.provider ?? 'simulado',
+      mpUserId: input.mpUserId ?? 'simulado-user',
+      accessToken: input.accessToken ?? 'nao-exposto',
+      status: 'ativo',
+      connectedAt: input.connectedAt ?? nowIso(),
+    };
+    saveData(userId, data);
+    notify();
+    return data.paymentAccount;
+  },
+
+  async disconnectPaymentAccount() {
+    const { userId, data } = requireData();
+    data.paymentAccount = null;
+    saveData(userId, data);
+    notify();
+  },
+
+  async listQuotePayments(quoteId) {
+    const list = getData()?.quotePayments ?? [];
+    return quoteId
+      ? list.filter((p) => p.quoteId === quoteId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      : [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
   async startCheckout({ plan }) {
     const { userId, data } = requireData();
     const checkoutId = generateId();
@@ -819,4 +861,62 @@ export function localTouchQuote(quoteId: string): void {
   quote.updatedAt = nowIso();
   saveData(userId, data);
   notify();
+}
+
+/**
+ * Pagamento de orçamento via link (MODO DEMONSTRAÇÃO): simula o fluxo
+ * completo do Mercado Pago — aprova o orçamento, registra o pagamento com a
+ * comissão do plano (free 2% / pago 0%) e gera notificação.
+ */
+export async function localPayQuoteByShareToken(
+  token: string,
+  payerName?: string,
+): Promise<{ ok: boolean; message: string }> {
+  const userId = getSessionUserId();
+  const data = getData(userId ?? undefined);
+  if (!userId || !data) return { ok: false, message: 'Sessão inválida.' };
+
+  const quote = data.quotes.find((q) => q.shareToken === token);
+  if (!quote) return { ok: false, message: 'Orçamento não encontrado.' };
+
+  const planId: PlanId = data.company.plan;
+  const { fee, seller } = computePlatformFee(planId, quote.total);
+  const id = generateId();
+  const now = nowIso();
+
+  quote.status = 'aprovado';
+  quote.approvedAt = now;
+  quote.updatedAt = now;
+
+  data.quotePayments.unshift({
+    id,
+    companyId: data.company.id,
+    quoteId: quote.id,
+    amount: quote.total,
+    platformFee: fee,
+    sellerReceives: seller,
+    status: 'aprovado',
+    provider: 'simulado',
+    providerId: id,
+    payerName: payerName ?? null,
+    createdAt: now,
+    paidAt: now,
+  });
+
+  data.notifications.unshift({
+    id: generateId(),
+    companyId: data.company.id,
+    type: 'status',
+    title: 'Pagamento recebido! 💰',
+    body:
+      `O cliente pagou o orçamento #${String(quote.number).padStart(4, '0')} pelo link. ` +
+      `Valor: R$ ${quote.total.toFixed(2).replace('.', ',')} (simulação).`,
+    link: `/app/orcamentos/${quote.id}`,
+    read: false,
+    createdAt: now,
+  });
+
+  saveData(userId, data);
+  notify();
+  return { ok: true, message: 'Pagamento aprovado (simulação).' };
 }

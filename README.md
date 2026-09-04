@@ -48,7 +48,11 @@ preços cadastrados pela própria empresa**.
 - **WhatsApp Business API** (Meta Cloud API): envio direto pela API oficial quando configurada,
   com fallback automático para o link `wa.me`. Inclui webhook de verificação/recepção e aba de
   configuração com teste de envio.
-- **Link público do orçamento** (plano Pro+): o cliente abre `https://seu-site/o/[token]`,
+- **Gateway de pagamento no link do orçamento** (Mercado Pago Split/Marketplace): o cliente
+  clica em **"Aprovar e pagar"** e é redirecionado ao checkout do Mercado Pago. O vendedor
+  conecta a conta (OAuth) e recebe o valor; o OrçaAI cobra **2% no plano Grátis** e
+  **0% (100% para o vendedor) nos planos Pro/Business**. Link público liberado em TODOS os planos.
+- **Link público do orçamento** (todos os planos): o cliente abre `https://seu-site/o/[token]`,
   vê o orçamento, baixa o PDF, e **aprova online** — o status muda para "Aprovado" e a
   empresa recebe notificação. Ao abrir o link, o orçamento é marcado como "Visualizado".
   Segurança: acesso via função `security definer` do Postgres (só lê o orçamento do token).

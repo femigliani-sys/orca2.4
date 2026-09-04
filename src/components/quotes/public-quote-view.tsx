@@ -8,9 +8,22 @@ import {
   ShieldCheck,
   CalendarDays,
   Eye,
+  CreditCard,
+  QrCode,
+  Loader2,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Logo } from '@/components/ui/logo';
 import { formatCurrency, formatDateFull, quoteNumberLabel, cn } from '@/lib/utils';
 import { downloadQuotePdf } from '@/lib/pdf';
@@ -21,6 +34,15 @@ import type { Company, Quote } from '@/lib/types';
 interface PublicQuoteData {
   quote: Quote;
   company: Company;
+  /** Pagamento pelo link habilitado (plano free/pro/business). */
+  payable: boolean;
+  /** Rótulo da taxa: '2% de taxa do OrçaAI' ou 'Sem taxas para você' etc. */
+  feeLabel: string;
+  /** true no modo demonstração (simula o checkout). */
+  simulate: boolean;
+  onApproveOnly?: () => void;
+  /** Executa o pagamento. Em produção redireciona (retorna undefined ao sucesso). */
+  onPay: () => Promise<string | undefined>;
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -33,21 +55,72 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   expirado: { label: 'Expirado', cls: 'bg-ink-100 text-ink-500' },
 };
 
-/** Visualização pública do orçamento (link compartilhado). */
-export function PublicQuoteView({ quote, company, onApproved }: PublicQuoteData & { onApproved?: () => void }) {
+export function PublicQuoteView({
+  quote,
+  company,
+  payable,
+  feeLabel,
+  simulate,
+  onApproveOnly,
+  onPay,
+}: PublicQuoteData) {
   const [approving, setApproving] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [payDialog, setPayDialog] = useState(false);
+  const [simConfirm, setSimConfirm] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [paid, setPaid] = useState(false);
+
   const status = effectiveStatus(quote);
   const expired = status === 'expirado';
   const canApprove = ['enviado', 'visualizado', 'negociacao'].includes(status);
+  const canPay = payable && canApprove && !paid;
   const s = STATUS_LABEL[status] ?? STATUS_LABEL.enviado;
 
   const waPhone = company.whatsapp || company.phone || '';
   const waText = `Olá! Vim do orçamento ${quoteNumberLabel(quote.number)} da ${company.name}.`;
   const waLink = waPhone ? buildWaLink(waPhone, waText) : '';
 
-  function handleApprove() {
+  async function startPay() {
+    setPayError(null);
+    if (simulate) {
+      setPayDialog(true); // modal com QR de simulação
+      return;
+    }
+    await runPay();
+  }
+
+  async function runPay() {
+    setPaying(true);
+    setPayError(null);
+    try {
+      const err = await onPay();
+      if (err) {
+        setPayError(err);
+      }
+      // Se não retornou erro e não é simulação → houve redirecionamento (página sai)
+    } catch (e) {
+      setPayError(e instanceof Error ? e.message : 'Erro ao processar o pagamento.');
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  async function simulateApprove() {
+    setSimConfirm(true);
+    const err = await onPay();
+    setSimConfirm(false);
+    if (err) {
+      setPayError(err);
+      return;
+    }
+    setPaid(true);
+    setPayDialog(false);
+  }
+
+  function handleApproveOnly() {
     setApproving(true);
-    onApproved?.();
+    onApproveOnly?.();
   }
 
   return (
@@ -135,31 +208,60 @@ export function PublicQuoteView({ quote, company, onApproved }: PublicQuoteData 
         )}
 
         {/* Ações */}
-        <div className="flex flex-col gap-2 border-t border-ink-100 bg-white px-6 py-4 sm:flex-row">
-          {canApprove && !expired && (
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" loading={approving} onClick={handleApprove}>
+        <div className="flex flex-col gap-2 border-t border-ink-100 bg-white px-6 py-4">
+          {/* Botão principal: pagamento */}
+          {canPay && (
+            <Button className="w-full bg-emerald-600 text-base hover:bg-emerald-700" loading={paying} onClick={startPay}>
+              {paying ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <CreditCard className="size-5" />
+              )}
+              Aprovar e pagar {formatCurrency(quote.total)}
+            </Button>
+          )}
+          {paid && (
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+              <CheckCircle2 className="size-5" /> Pagamento aprovado — obrigado!
+            </div>
+          )}
+
+          {payError && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {payError}
+            </div>
+          )}
+
+          {/* fallback: só aprovar (sem pagamento) */}
+          {canApprove && !expired && !paid && !canPay && (
+            <Button className="w-full bg-emerald-600 hover:bg-emerald-700" loading={approving} onClick={handleApproveOnly}>
               <CheckCircle2 className="size-4" /> Aprovar orçamento
             </Button>
           )}
           {status === 'aprovado' && (
-            <div className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
               <CheckCircle2 className="size-5" /> Orçamento aprovado!
             </div>
           )}
-          {waLink && (
-            <Button asChild variant="whatsapp" className="flex-1">
-              <a href={waLink} target="_blank" rel="noopener noreferrer">
-                <MessageCircle className="size-4" /> Falar com {company.name.split(' ')[0]}
-              </a>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {waLink && (
+              <Button asChild variant="whatsapp" className="flex-1">
+                <a href={waLink} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="size-4" /> Falar com {company.name.split(' ')[0]}
+                </a>
+              </Button>
+            )}
+            <Button variant="secondary" className="flex-1" onClick={() => downloadQuotePdf(company, quote)}>
+              <Download className="size-4" /> Baixar PDF
             </Button>
+          </div>
+
+          {canPay && (
+            <p className="text-center text-xs text-ink-400">
+              Pagamento processado pelo Mercado Pago via link seguro. {feeLabel}
+            </p>
           )}
-          <Button
-            variant="secondary"
-            className="flex-1"
-            onClick={() => downloadQuotePdf(company, quote)}
-          >
-            <Download className="size-4" /> Baixar PDF
-          </Button>
         </div>
       </div>
 
@@ -172,6 +274,76 @@ export function PublicQuoteView({ quote, company, onApproved }: PublicQuoteData 
           <Eye className="size-3" /> Visualizado em {formatDateFull(quote.viewedAt)}
         </p>
       )}
+
+      {/* Modal de pagamento simulado (modo demo) */}
+      <Dialog open={payDialog} onOpenChange={(o) => { if (!o) setPayDialog(false); }}>
+        <DialogContent className="max-w-sm text-center">
+          <DialogHeader className="items-center">
+            <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-brand-50">
+              <QrCode className="size-8 text-brand-600" />
+            </span>
+            <DialogTitle className="mt-3">Pagamento de {formatCurrency(quote.total)}</DialogTitle>
+            <DialogDescription>
+              Checkout de demonstração — em produção você pagaria por Pix, cartão ou boleto no Mercado Pago.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mx-auto w-fit rounded-2xl border border-ink-100 bg-white p-4 shadow-sm">
+            <QrMock />
+          </div>
+          <p className="text-xs text-ink-400">QR Code ilustrativo · Pix de demonstração</p>
+
+          <div className="mx-auto w-full max-w-[240px] rounded-xl border border-ink-100 bg-ink-50/60 p-4">
+            <p className="text-xs uppercase tracking-wide text-ink-400">A pagar</p>
+            <p className="mt-1 text-2xl font-bold text-ink-950">{formatCurrency(quote.total)}</p>
+            <p className="mt-1 text-[11px] text-ink-400">{feeLabel}</p>
+          </div>
+
+          {payError && (
+            <p className="flex items-start justify-center gap-1.5 text-xs text-rose-600">
+              <XCircle className="mt-0.5 size-3.5 shrink-0" /> {payError}
+            </p>
+          )}
+
+          <DialogFooter className="mt-2 justify-center">
+            <Button variant="secondary" onClick={() => setPayDialog(false)} disabled={simConfirm}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              loading={simConfirm}
+              onClick={simulateApprove}
+            >
+              <CheckCircle2 className="size-4" /> Simular pagamento aprovado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function QrMock() {
+  const cells = 21;
+  const inFinder = (x: number, y: number) =>
+    (x < 7 && y < 7) || (x >= cells - 7 && y < 7) || (x < 7 && y >= cells - 7);
+  const finderOn = (x: number, y: number) => {
+    const lx = x < 7 ? x : x >= cells - 7 ? x - (cells - 7) : x;
+    const ly = y < 7 ? y : y >= cells - 7 ? y - (cells - 7) : y;
+    const inBorder = lx === 0 || lx === 6 || ly === 0 || ly === 6;
+    const inCore = lx >= 2 && lx <= 4 && ly >= 2 && ly <= 4;
+    return inBorder || inCore;
+  };
+  const randomOn = (x: number, y: number) => ((x * 31 + y * 17 + x * y) % 3) !== 0;
+  return (
+    <svg viewBox={`0 0 ${cells} ${cells}`} className="size-40" shapeRendering="crispEdges">
+      <rect x={0} y={0} width={cells} height={cells} fill="#ffffff" />
+      {Array.from({ length: cells }).map((_, y) =>
+        Array.from({ length: cells }).map((_, x) => {
+          const on = inFinder(x, y) ? finderOn(x, y) : randomOn(x, y);
+          return <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={on ? '#1e293b' : '#ffffff'} />;
+        }),
+      )}
+    </svg>
   );
 }

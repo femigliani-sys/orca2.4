@@ -44,6 +44,53 @@ export async function POST(req: Request) {
     const payment = await getPayment(String(id));
     if (payment) {
       const extRef = payment.external_reference ?? '';
+
+      // ---------- Pagamento de ORÇAMENTO (link público) ----------
+      if (extRef.startsWith('quote:')) {
+        const [, companyId, quoteId] = extRef.split(':');
+        if (companyId && quoteId) {
+          const now = new Date().toISOString();
+          const amount = Number(payment.transaction_amount ?? 0);
+          if (payment.status === 'approved') {
+            // Confirma os pagamentos pendentes deste orçamento
+            await supabase
+              .from('quote_payments')
+              .update({ status: 'aprovado', paid_at: now, payer_name: payment.payer?.first_name ?? null })
+              .eq('company_id', companyId)
+              .eq('quote_id', quoteId)
+              .eq('status', 'pendente');
+
+            // Aprova o orçamento se ainda não estiver
+            await supabase
+              .from('quotes')
+              .update({ status: 'aprovado', approved_at: now, updated_at: now })
+              .eq('id', quoteId)
+              .eq('company_id', companyId)
+              .in('status', ['enviado', 'visualizado', 'negociacao']);
+
+            await supabase.from('notifications').insert({
+              company_id: companyId,
+              type: 'status',
+              title: 'Pagamento recebido! 💰',
+              body:
+                'O cliente pagou o orçamento pelo link público. Valor: R$ ' +
+                amount.toFixed(2).replace('.', ',') +
+                '.',
+              link: `/app/orcamentos/${quoteId}`,
+              read: false,
+            });
+          } else if (['rejected', 'cancelled'].includes(payment.status)) {
+            await supabase
+              .from('quote_payments')
+              .update({ status: payment.status === 'cancelled' ? 'cancelado' : 'recusado' })
+              .eq('company_id', companyId)
+              .eq('quote_id', quoteId)
+              .eq('status', 'pendente');
+          }
+        }
+        return NextResponse.json({ received: true });
+      }
+
       const [companyId, planRaw] = extRef.split(':');
       const plan = PLANS.find((p) => p.id === planRaw);
 

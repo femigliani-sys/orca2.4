@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { PublicQuoteView } from '@/components/quotes/public-quote-view';
 import { isDemo } from '@/lib/db';
 import { localGetQuoteByShareToken } from '@/lib/db/local';
-import { localTouchQuote } from '@/lib/db/local';
+import { localTouchQuote, localPayQuoteByShareToken } from '@/lib/db/local';
 import { db } from '@/lib/db';
 import { DEFAULT_SETTINGS } from '@/lib/defaults';
+import { platformFeePercent } from '@/lib/plans';
 import type { Company, Quote } from '@/lib/types';
 
 type LoadState =
@@ -72,6 +73,7 @@ export default function PublicQuotePage({ params }: { params: { token: string } 
           viewed_at: string | null;
           company: {
             name: string;
+            plan?: string | null;
             phone?: string | null;
             whatsapp?: string | null;
             email?: string | null;
@@ -91,7 +93,7 @@ export default function PublicQuotePage({ params }: { params: { token: string } 
           address: data.company.address ?? undefined,
           logoUrl: data.company.logo_url ?? undefined,
           settings: { ...DEFAULT_SETTINGS, ...(data.company.settings ?? {}) } as Company['settings'],
-          plan: 'pro',
+          plan: (data.company.plan as Company['plan']) ?? 'free',
           quoteCounter: 0,
           createdAt: '',
         };
@@ -124,6 +126,46 @@ export default function PublicQuotePage({ params }: { params: { token: string } 
       cancelled = true;
     };
   }, [token]);
+
+  function feeLabelFor(plan: string): string {
+    const pct = platformFeePercent(plan === 'business' || plan === 'pro' ? plan : 'free');
+    return pct > 0
+      ? 'Valor inclui taxa de ' + pct + '% do OrçaAI (parcelado ao prestador).'
+      : 'Sem taxas — o valor total vai para o prestador.';
+  }
+
+  /** Retorna mensagem de erro (undefined = sucesso / redirecionado). */
+  async function handlePay(): Promise<string | undefined> {
+    if (state.phase !== 'ready') return undefined;
+    try {
+      if (isDemo()) {
+        const res = await localPayQuoteByShareToken(token, state.quote.customerName || 'Cliente');
+        if (!res.ok) return res.message;
+        const found = localGetQuoteByShareToken(token);
+        if (found) {
+          setState({
+            phase: 'ready',
+            quote: { ...found.quote, status: 'aprovado' },
+            company: found.company,
+          });
+        }
+        return undefined;
+      }
+      const res = await fetch('/api/public/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { initPoint?: string; error?: string };
+      if (!res.ok || !json.initPoint) {
+        return json.error || 'Não foi possível gerar o pagamento.';
+      }
+      window.location.href = json.initPoint; // redireciona para o Checkout Pro (split)
+      return undefined;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Erro ao processar o pagamento.';
+    }
+  }
 
   async function handleApprove() {
     if (state.phase !== 'ready') return;
@@ -176,7 +218,11 @@ export default function PublicQuotePage({ params }: { params: { token: string } 
           <PublicQuoteView
             quote={state.quote}
             company={state.company}
-            onApproved={handleApprove}
+            payable
+            feeLabel={feeLabelFor(state.company.plan)}
+            simulate={isDemo()}
+            onApproveOnly={handleApprove}
+            onPay={handlePay}
           />
         )}
 

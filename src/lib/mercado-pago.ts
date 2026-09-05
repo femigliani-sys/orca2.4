@@ -382,3 +382,19 @@ export async function searchPaymentsByExternalReference(
     return null;
   }
 }
+
+/** Busca pagamentos por PREFERENCE_ID (correlação exata de um checkout). */
+export async function searchPaymentsByPreferenceId(
+  token: string,
+  preferenceId: string,
+): Promise<MpPayment[] | null> {
+  try {
+    const url = `${API}/v1/payments/search?preference_id=${encodeURIComponent(preferenceId)}&limit=5`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { results?: MpPayment[] };
+    return data.results ?? [];
+  } catch {
+    return null;
+  }
+}

@@ -4,6 +4,7 @@ import { createAdminSupabase } from '@/lib/supabase-admin';
 import {
   getPayment,
   searchPaymentsByExternalReference,
+  searchPaymentsByPreferenceId,
   isMercadoPagoConfigured,
 } from '@/lib/mercado-pago';
 import { PLANS } from '@/lib/plans';
@@ -138,8 +139,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, activated: true, kind: 'plan' });
   }
 
-  // ---- PLANO com preference_id (correlação exata quando não há extRef) ----
+  // ---- PLANO com preference_id (quando a URL volta com preference_id e não
+  // há external_reference) — exige CONFIRMAÇÃO no MP antes de ativar. ----
   if (preferenceId) {
+    // Busca pagamentos da preferência e exige pelo menos um "approved".
+    let approved = false;
+    if (isMercadoPagoConfigured()) {
+      try {
+        const results = await searchPaymentsByPreferenceId(
+          process.env.MERCADO_PAGO_ACCESS_TOKEN as string,
+          preferenceId,
+        );
+        approved = (results ?? []).some((r) => r.status === 'approved');
+      } catch {
+        approved = false;
+      }
+    }
+    if (!approved) {
+      return NextResponse.json({
+        ok: true,
+        activated: false,
+        reason: 'Pagamento não confirmado no Mercado Pago.',
+      });
+    }
     const { error } = await db.rpc('finalize_plan_payment_by_preference', {
       p_preference_id: preferenceId,
       p_amount: null,

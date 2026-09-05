@@ -35,7 +35,7 @@ preços cadastrados pela própria empresa**.
 - **Pipeline de vendas** estilo Kanban com arrastar e soltar
 - **Meus serviços** (CRUD, duplicar, ativar/desativar, categorias)
 - **Configurações** da empresa, padrões de orçamento e aparência do PDF
-- **Planos** (Grátis, Pro e Business) com preços centralizados em um arquivo (`src/lib/plans.ts` — o Business usa R$1/mês para testes)
+- **Planos** (Grátis / Pro R$59 / Business R$99) com preços centralizados em um arquivo (`src/lib/plans.ts`)
 - **Sistema de compra completo**:
   - Página de checkout dedicada (`/app/planos/checkout?plan=pro`) com escolha de **Pix, cartão ou boleto**
   - **Assinatura recorrente mensal** via Mercado Pago (preapproval) com fallback para Checkout Pro
@@ -120,7 +120,7 @@ NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY=
 > na tela do Mercado Pago). Obs.: não usamos preapproval/recorrência do MP porque ele só aceita
 > cartão (sem Pix). Configure o webhook do MP para
 > `https://SEU-DOMINIO/api/billing/webhook`. Sem a chave, o checkout roda **simulado** (com aviso).
-> Migrações necessárias: `0001` a `0009`. A 0009 corrige o status que
+> Migrações necessárias: `0001` a `0010`. A 0009 corrige o status que
 > "ficava Pendente": agora `finalize_plan_payment` MARCA os registros pendentes
 > da tabela `payments` como aprovados (antes inseria nova linha e o pendente
 > original ficava eterno) e garante EXECUTE para anon/authenticated (o webhook

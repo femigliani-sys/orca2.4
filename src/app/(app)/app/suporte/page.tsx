@@ -89,7 +89,7 @@ const GUIDES = [
     tone: 'bg-violet-50 text-violet-600',
     body: [
       'Em "Planos" você assina Pro ou Business (valores em "Planos"), vê o histórico de pagamentos e pode cancelar quando quiser.',
-      'Sem a chave do Mercado Pago, o checkout roda em modo simulado para teste.',
+      'O pagamento é processado com segurança pelo Mercado Pago. Enquanto a integração da sua conta não estiver ativa, o fluxo pode ser testado em modo de demonstração.',
       'Ao pagar, os recursos (IA, pipeline, link público etc.) são liberados automaticamente.',
     ],
     link: { href: '/app/planos', label: 'Ver planos e cobrança' },
@@ -110,28 +110,44 @@ const GUIDES = [
 // ---------------------------------------------------------------- FAQ
 const FAQS = [
   {
-    q: 'Depois do login aparece a tela em branco / o painel não carrega.',
-    a: 'Isso indica que o banco (Supabase) ainda não respondeu. Abra o projeto no Supabase → SQL Editor e execute as migrações 0001 até 0005 (arquivos em supabase/migrations/). Depois recarregue com Ctrl+Shift+R. O app mostra um aviso amarelo com o erro exato quando algo falha — envie esse texto para o suporte se continuar.',
+    q: 'Como o cliente paga pelo link do orçamento?',
+    a: 'Quando você envia o link público, o cliente vê o orçamento e pode clicar em "Aprovar e pagar". Ele escolhe Pix, cartão ou boleto e o pagamento é processado com segurança pelo Mercado Pago. Você é avisado na hora e o orçamento é marcado como aprovado automaticamente.',
   },
   {
-    q: 'A IA não encontra meus serviços / diz "preço não cadastrado".',
-    a: 'A IA só sugere serviços ativos do seu catálogo (nunca inventa preços). Cadastre os serviços em "Meus serviços" com nome, preço e unidade. Para reconhecer modelos, inclua o número no nome (ex.: "12.000 BTUs").',
+    q: 'Quando recebo o dinheiro de uma venda pelo link?',
+    a: 'No Pix, a confirmação costuma ser imediata e o orçamento é aprovado na sequência. No cartão e no boleto, o prazo de liberação acompanha as regras do Mercado Pago. Você acompanha tudo em Configurações → Pagamentos.',
   },
   {
-    q: 'O botão do WhatsApp não envia.',
-    a: 'Confirme que o cliente tem telefone com DDD (ex.: (11) 99999-9999). Sem a API oficial configurada, o app abre o wa.me com a mensagem pronta. Se configurou a API da Meta e ainda falha, pode ser a janela de 24h do WhatsApp — o app volta para o wa.me automaticamente.',
+    q: 'Todo valor pago pelo link cai inteiro para mim?',
+    a: 'Depende do seu plano. No plano Grátis, o OrçaAI retém uma taxa de 2% sobre cada pagamento recebido. Nos planos Pro e Business, 100% do valor vai para você, sem taxas do OrçaAI.',
   },
   {
-    q: 'Como libero a IA, pipeline e link público?',
-    a: 'Esses recursos são dos planos Pro e Business. Em "Planos", clique em "Assinar Pro/Business" e complete o pagamento (no modo demonstração o checkout é simulado).',
+    q: 'Como funciona o follow-up e para que serve?',
+    a: 'Todo orçamento enviado gera um lembrete automático para 2 dias depois. Na página "Follow-ups" você vê quem ainda não respondeu e envia uma mensagem pronta com um clique — é a melhor forma de não deixar a venda esfriar.',
   },
   {
-    q: 'Como configuro o Supabase e as chaves?',
-    a: 'Crie o projeto no Supabase e execute as migrações em supabase/migrations/. Depois adicione na Vercel (Settings → Environment Variables): NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY (valor cru, sem espaços) e faça redeploy. Sem chaves, o app roda em modo demonstração (dados no navegador).',
+    q: 'O cliente pediu uma mudança no orçamento. O que faço?',
+    a: 'Você pode duplicar o orçamento e ajustar itens, quantidades e descontos, ou editar o orçamento atual e reenviar o link. Enquanto negocia, deixe o status como "Em negociação" para acompanhar no pipeline.',
   },
   {
-    q: 'Onde ficam os dados do modo demonstração?',
-    a: 'No navegador (localStorage). Limpar os dados do site (ou usar outra janela anônima) cria uma conta nova do zero.',
+    q: 'Posso acompanhar o andamento das minhas vendas?',
+    a: 'Sim. A página "Pipeline" mostra cada orçamento em uma coluna (novo, enviado, negociação, aprovado, perdido) — basta arrastar o card para atualizar. O dashboard traz o valor enviado, aprovado e a taxa de conversão.',
+  },
+  {
+    q: 'Consigo usar o OrçaAI pelo celular?',
+    a: 'Sim. O OrçaAI é totalmente responsivo e funciona bem no celular, tablet, notebook e computador. Você consegue criar um orçamento e enviar pelo WhatsApp com poucos toques, direto do celular.',
+  },
+  {
+    q: 'Como funcionam os planos e a renovação?',
+    a: 'Os planos Pro e Business são mensais e a cobrança é feita pelo Mercado Pago (Pix, cartão ou boleto). Você pode fazer upgrade a qualquer momento e cancelar quando quiser — ao cancelar, volta para o plano Grátis automaticamente.',
+  },
+  {
+    q: 'Meus dados e os dos meus clientes ficam seguros?',
+    a: 'Sim. Cada conta só enxerga os próprios dados, as senhas são protegidas e o link público do orçamento só expõe aquele documento — nunca seus outros dados. Os pagamentos são processados diretamente pelo Mercado Pago.',
+  },
+  {
+    q: 'Preciso de ajuda com um pagamento ou quero um reembolso?',
+    a: 'Para qualquer dúvida sobre uma cobrança específica, use o formulário acima e informe o valor e a data (ou envie o número do orçamento). Nossa equipe analisa o caso e orienta o próximo passo com o Mercado Pago.',
   },
 ];
 
@@ -280,15 +296,14 @@ export default function SupportPage() {
                   <MessageCircle className="size-4" /> Enviar pelo WhatsApp
                 </Button>
               ) : (
-                <Button variant="secondary" disabled title="Configure NEXT_PUBLIC_SUPPORT_WHATSAPP para ativar">
+                <Button variant="secondary" disabled title="Em breve: WhatsApp de suporte disponível">
                   <MessageCircle className="size-4" /> WhatsApp (não configurado)
                 </Button>
               )}
             </div>
             {!support.whatsapp && (
               <p className="text-xs text-ink-400">
-                Configure <code className="rounded bg-ink-100 px-1">NEXT_PUBLIC_SUPPORT_WHATSAPP</code> nas variáveis de
-                ambiente para habilitar o contato por WhatsApp.
+                O contato por WhatsApp do suporte estará disponível em breve. Enquanto isso, use o e-mail.
               </p>
             )}
           </CardContent>

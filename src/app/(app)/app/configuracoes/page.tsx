@@ -15,7 +15,6 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { db, isDemo } from '@/lib/db';
-import { getSiteUrl } from '@/lib/site-url';
 import { BUSINESS_TYPES, VALIDITY_OPTIONS } from '@/lib/constants';
 import { DEFAULT_SETTINGS, DEFAULT_QUOTE_MESSAGE } from '@/lib/defaults';
 import { buildWaLink } from '@/lib/whatsapp';
@@ -526,7 +525,7 @@ export default function SettingsPage() {
                           if (json.connectUrl) {
                             window.location.href = json.connectUrl; // OAuth do Mercado Pago
                           } else {
-                            toast.warning(json.warning || 'Configure a aplicação marketplace (MERCADO_PAGO_MARKETPLACE_CLIENT_ID).');
+                            toast.warning('A conexão com o Mercado Pago ainda não está disponível para sua conta. Tente novamente em instantes ou fale com o suporte.');
                           }
                         }
                       } catch (err) {
@@ -542,16 +541,6 @@ export default function SettingsPage() {
               </div>
               {payInfo && <p className="text-xs text-amber-600">{payInfo}</p>}
 
-              {!isDemo() && (
-                <div className="rounded-xl border border-ink-100 bg-ink-50/50 p-4 text-xs text-ink-500">
-                  <p className="font-semibold text-ink-700">Para receber pagamentos reais:</p>
-                  <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-                    <li>Sua aplicação no Mercado Pago precisa ser <strong>Marketplace</strong> (aceita pagamentos por outros vendedores).</li>
-                    <li>Adicione no ambiente: <code className="rounded bg-white px-1">MERCADO_PAGO_MARKETPLACE_CLIENT_ID</code> e <code className="rounded bg-white px-1">MERCADO_PAGO_MARKETPLACE_CLIENT_SECRET</code> (secret do app). Não use o MERCADO_PAGO_ACCESS_TOKEN como secret.</li>
-                    <li>No painel do MP, cadastre a URL de redirect (sem barra dupla): <code className="rounded bg-white px-1">{`${getSiteUrl()}/api/mp/callback`}</code>.</li>
-                  </ol>
-                </div>
-              )}
             </CardContent>
           </Card>
 

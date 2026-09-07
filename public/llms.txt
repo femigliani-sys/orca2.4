@@ -1,0 +1,48 @@
+# OrçaAI
+
+> Transforme pedidos de orçamento em vendas.
+
+O OrçaAI é um SaaS brasileiro para pequenos negócios e profissionais autônomos
+(eletricistas, encanadores, pintores, técnicos de ar-condicionado, marceneiros,
+empresas de limpeza, assistência técnica e outros) criarem, gerenciarem e
+enviarem orçamentos profissionais em segundos — com IA que interpreta a
+mensagem do cliente usando apenas os serviços e preços cadastrados pelo próprio
+negócio (nunca inventa valores).
+
+## Páginas públicas
+
+- [OrçaAI — Página inicial](https://orcaaii.com/): landing page com a proposta
+  do produto, demonstração interativa da IA, funcionalidades, preços e FAQ.
+
+## Funcionalidades principais
+
+- Geração de orçamentos com IA a partir de mensagens do cliente (WhatsApp,
+  Instagram e e-mail), revisão e envio em poucos cliques.
+- Orçamento profissional em PDF com logo, termos e assinatura da empresa.
+- Mensagem pronta para o cliente com envio por WhatsApp.
+- Clientes: histórico completo de orçamentos, valores e status.
+- Follow-ups automáticos e lembretes para não deixar a venda esfriar.
+- Pipeline de vendas (Kanban) para acompanhar cada orçamento.
+- Métricas: valor enviado, valor aprovado e taxa de conversão.
+- Link público do orçamento, no qual o cliente visualiza e pode aprovar e pagar
+  online (Pix, cartão ou boleto via Mercado Pago).
+- Planos Grátis, Pro e Business.
+
+## Seções da página inicial
+
+- Como funciona: https://orcaaii.com/#como-funciona
+- Funcionalidades: https://orcaaii.com/#funcionalidades
+- Demonstração: https://orcaaii.com/#demonstracao
+- Preços: https://orcaaii.com/#precos
+- Perguntas frequentes: https://orcaaii.com/#faq
+
+## Planos
+
+Os planos são apresentados na seção Preços da página inicial:
+https://orcaaii.com/#precos
+
+- Grátis: até 5 orçamentos por mês, 10 serviços e 30 clientes.
+- Pro (R$ 59/mês): orçamentos ilimitados, IA, PDF personalizado, clientes
+  ilimitados, pipeline, follow-ups, métricas e pagamento pelo link sem taxas.
+- Business (R$ 99/mês): tudo do Pro, múltiplos usuários, permissões,
+  automações e relatórios avançados.

@@ -1,0 +1,19 @@
+# OrçaAI — robots.txt
+# Permite o rastreamento das páginas públicas e impede o rastreamento
+# de áreas privadas (autenticação, painel e compartilhamentos).
+
+User-agent: *
+Allow: /
+
+# Área do usuário (painel/dashboard) e fluxos autenticados
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /auth/
+
+# API
+Disallow: /api/
+
+# Links públicos de compartilhamento de orçamento (token por cliente)
+Disallow: /o/
+
+Sitemap: https://orcaaii.com/sitemap.xml

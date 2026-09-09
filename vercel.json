@@ -1,4 +1,12 @@
 {
   "framework": "nextjs",
-  "regions": ["gru1"]
+  "regions": ["gru1"],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.orcaaii.com" }],
+      "destination": "https://orcaaii.com/:path*",
+      "permanent": true
+    }
+  ]
 }

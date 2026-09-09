@@ -14,6 +14,10 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: getSiteUrlObject(),
+  // URL canônica única (sem www) — igual ao sitemap
+  alternates: {
+    canonical: '/',
+  },
   title: {
     default: 'OrçaAI — Transforme pedidos de orçamento em vendas',
     template: '%s · OrçaAI',
@@ -22,7 +26,10 @@ export const metadata: Metadata = {
     'Crie orçamentos profissionais em segundos, acompanhe seus clientes e nunca esqueça um follow-up. A IA do OrçaAI transforma pedidos do WhatsApp em orçamentos prontos.',
   keywords: ['orçamento', 'orcamento', 'SaaS', 'IA', 'WhatsApp', 'pequenos negócios', 'prestador de serviços'],
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-192.png', type: 'image/png', sizes: '192x192' },
+    ],
     shortcut: '/favicon.ico',
     apple: '/apple-touch-icon.png',
   },

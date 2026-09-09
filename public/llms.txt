@@ -13,6 +13,9 @@ negócio (nunca inventa valores).
 
 - [OrçaAI — Página inicial](https://orcaaii.com/): landing page com a proposta
   do produto, demonstração interativa da IA, funcionalidades, preços e FAQ.
+- [Política de Privacidade (LGPD)](https://orcaaii.com/privacidade): como
+  tratamos dados pessoais e seus direitos.
+- [Termos de Uso](https://orcaaii.com/termos): condições de uso da plataforma.
 
 ## Funcionalidades principais
 

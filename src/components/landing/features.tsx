@@ -252,6 +252,8 @@ export function Footer() {
           <a href="#precos" className="hover:text-white">Preços</a>
           <a href="#faq" className="hover:text-white">FAQ</a>
           <a href="/auth/login" className="hover:text-white">Entrar</a>
+          <a href="/privacidade" className="hover:text-white">Privacidade</a>
+          <a href="/termos" className="hover:text-white">Termos</a>
         </div>
       </div>
     </footer>
